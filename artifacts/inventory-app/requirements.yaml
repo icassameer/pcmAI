@@ -1,0 +1,15 @@
+packages:
+  "recharts": "For rendering beautiful dashboard charts (Sales/Purchases trend)"
+  "framer-motion": "For smooth page transitions and interactive micro-animations"
+  "date-fns": "For elegant date formatting across tables and reports"
+  "react-hook-form": "For complex form state management, especially dynamic line items in sales/purchases"
+  "@hookform/resolvers": "For Zod validation integration with react-hook-form"
+
+images:
+  - path: "artifacts/inventory-app/public/images/auth-bg.png"
+    description: "Abstract, elegant, corporate dark geometric background with subtle deep blue and indigo gradients, suitable for a modern SaaS login page"
+    aspect_ratio: "16:9"
+
+notes:
+  - JWT auth is implemented using standard localStorage token bearer patterns
+  - API hooks are imported from the workspace generated output (@workspace/api-client-react)

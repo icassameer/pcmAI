@@ -1,0 +1,45 @@
+import { pgTable, serial, text, timestamp, integer, numeric, index } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod/v4";
+import { suppliersTable } from "./suppliers";
+import { productsTable } from "./products";
+
+export const purchasesTable = pgTable("purchases", {
+  id: serial("id").primaryKey(),
+  invoiceNo: text("invoice_no").notNull(),
+  invoiceDate: timestamp("invoice_date", { withTimezone: true }).notNull(),
+  supplierId: integer("supplier_id").notNull().references(() => suppliersTable.id),
+  subtotal: numeric("subtotal", { precision: 14, scale: 2 }).notNull().default("0"),
+  taxAmount: numeric("tax_amount", { precision: 14, scale: 2 }).notNull().default("0"),
+  discount: numeric("discount", { precision: 14, scale: 2 }).notNull().default("0"),
+  grandTotal: numeric("grand_total", { precision: 14, scale: 2 }).notNull().default("0"),
+  paidAmount: numeric("paid_amount", { precision: 14, scale: 2 }).notNull().default("0"),
+  balanceDue: numeric("balance_due", { precision: 14, scale: 2 }).notNull().default("0"),
+  paymentStatus: text("payment_status").notNull().default("pending"),
+  isInterState: text("is_inter_state").notNull().default("false"),
+  createdBy: integer("created_by"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
+}, (table) => [
+  index("purchases_date_idx").on(table.invoiceDate),
+  index("purchases_supplier_idx").on(table.supplierId),
+]);
+
+export const purchaseItemsTable = pgTable("purchase_items", {
+  id: serial("id").primaryKey(),
+  purchaseId: integer("purchase_id").notNull().references(() => purchasesTable.id, { onDelete: "cascade" }),
+  productId: integer("product_id").notNull().references(() => productsTable.id),
+  quantity: numeric("quantity", { precision: 12, scale: 2 }).notNull(),
+  unit: text("unit").notNull(),
+  unitPrice: numeric("unit_price", { precision: 12, scale: 2 }).notNull(),
+  discount: numeric("discount", { precision: 12, scale: 2 }).notNull().default("0"),
+  gstRate: numeric("gst_rate", { precision: 5, scale: 2 }).notNull(),
+  cgst: numeric("cgst", { precision: 12, scale: 2 }).notNull().default("0"),
+  sgst: numeric("sgst", { precision: 12, scale: 2 }).notNull().default("0"),
+  igst: numeric("igst", { precision: 12, scale: 2 }).notNull().default("0"),
+  total: numeric("total", { precision: 14, scale: 2 }).notNull(),
+});
+
+export const insertPurchaseSchema = createInsertSchema(purchasesTable).omit({ id: true, createdAt: true, updatedAt: true });
+export type InsertPurchase = z.infer<typeof insertPurchaseSchema>;
+export type Purchase = typeof purchasesTable.$inferSelect;

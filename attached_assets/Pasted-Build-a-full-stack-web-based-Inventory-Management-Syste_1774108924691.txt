@@ -1,0 +1,228 @@
+Build a full-stack web-based Inventory Management System with the following complete specifications:
+
+---
+
+## 🏗️ TECH STACK
+- **Frontend**: React + Vite + Tailwind CSS
+- **Backend**: Node.js + Express.js
+- **Database**: PostgreSQL with Drizzle ORM
+- **Auth**: JWT + bcrypt (role-based access control)
+- **PDF Generation**: pdfkit or puppeteer (for GST invoices & reports)
+- **Excel Export**: exceljs (for reports)
+
+---
+
+## 👥 USER ROLES & PERMISSIONS
+
+### Roles:
+1. **Super Admin** – Full access: manage users, settings, billing, all reports
+2. **Admin** – Manage products, purchases, sales, GST reports, view all data
+3. **Store Keeper** – Add/update stock, record purchases, view own entries
+4. **Accountant** – View/export reports, billing, GST summaries only
+5. **Viewer** – Read-only access to stock and reports
+
+### Security Requirements:
+- JWT authentication with refresh tokens (access token: 15min, refresh: 7 days)
+- Passwords hashed with bcrypt (salt rounds: 12)
+- Role-based route guards on both frontend and backend
+- Rate limiting on all API endpoints (express-rate-limit)
+- SQL injection prevention via parameterized queries (Drizzle ORM)
+- XSS protection via helmet.js
+- CORS configured for allowed origins only
+- Input validation on all forms (zod schema validation)
+- Audit log table: track every create/update/delete with user ID + timestamp
+- Session invalidation on logout (token blacklist via Redis or DB)
+- Account lockout after 5 failed login attempts (unlock after 30 min)
+
+---
+
+## 📦 PRODUCT MANAGEMENT
+
+### Product Fields:
+- Product ID (auto-generated, unique)
+- Product Name
+- Category (custom categories, user-defined)
+- Brand / Manufacturer
+- HSN Code (for GST)
+- Unit of Measurement: **gm, kg, ltr, ml, pcs, tonne, meter, feet, box, dozen, pack**
+- Purchase Price (per unit)
+- Selling Price (per unit)
+- MRP
+- GST Rate (0%, 5%, 12%, 18%, 28%)
+- IGST / CGST / SGST auto-split
+- Current Stock Quantity
+- Minimum Stock Alert threshold
+- Shelf / Rack / Location in warehouse
+- Barcode / SKU
+- Product Image upload
+- Supplier/Vendor linked
+- Expiry Date (optional, for perishables)
+- Active / Inactive status
+
+### Features:
+- Bulk product import via CSV/Excel upload
+- Export product list to Excel/PDF
+- Low stock alert dashboard widget
+- Search, filter, sort, paginate (handle 100,000+ products efficiently — use indexed DB queries, server-side pagination)
+- Product history log (price changes, stock adjustments)
+
+---
+
+## 🛒 PURCHASE MANAGEMENT
+
+- Record purchases from suppliers
+- Fields: Supplier, Invoice No, Invoice Date, products (multiple line items), quantity, unit, purchase price, GST, discount, total
+- Auto-update stock on purchase save
+- Purchase return / credit note
+- Pending payments tracker
+- Export purchase register (monthly/annual) to Excel/PDF
+
+---
+
+## 💰 SALES MANAGEMENT
+
+- Create sale / invoice for customers
+- Fields: Customer name, phone, address, GSTIN (optional), sale date, products (multi-line), quantity, unit, rate, discount, GST breakdown, grand total
+- Auto-deduct stock on sale
+- Sales return / debit note
+- Partial payment / balance due tracking
+- Export sales register (monthly/annual) to Excel/PDF
+
+---
+
+## 🧾 GST BILLING
+
+- Generate GST-compliant tax invoices (as PDF)
+- Invoice contains:
+  - Seller details (name, address, GSTIN, state)
+  - Buyer details
+  - Serial invoice number (auto-increment, format: INV-2024-0001)
+  - HSN/SAC code per item
+  - Taxable value, CGST, SGST, IGST (auto-split based on inter/intra state)
+  - Total in words
+  - E-way bill number field (optional)
+  - Digital signature placeholder
+- GSTR-1 style summary report (B2B, B2C breakdowns)
+- Monthly GST summary (Input tax credit vs Output tax)
+- Download invoice as PDF
+
+---
+
+## 📊 REPORTS MODULE
+
+### Sales Reports:
+- Daily / Weekly / Monthly / Annual sales summary
+- Product-wise sales report
+- Customer-wise sales report
+- Top 10 selling products
+- Sales vs Target comparison
+
+### Purchase Reports:
+- Monthly / Annual purchase register
+- Supplier-wise purchase report
+- Pending payment report
+
+### Inventory Reports:
+- Current stock report (all units)
+- Stock valuation report (FIFO / weighted average)
+- Low stock / out-of-stock report
+- Dead stock report (no movement in 90 days)
+- Stock movement ledger per product
+
+### GST Reports:
+- GSTR-1 output (sales)
+- GSTR-2 input (purchases)
+- Monthly GST payable summary
+
+### All reports:
+- Filterable by date range, category, product, user
+- Export to **PDF** and **Excel**
+- Print-friendly layout
+
+---
+
+## 💳 BILLING / SUBSCRIPTION PLANS (for SaaS model)
+
+- **Monthly Plan**: ₹X/month per business
+- **Annual Plan**: ₹X/year (discount applied)
+- Plan tiers:
+  - **Basic**: up to 500 products, 1 user, no GST billing
+  - **Pro**: up to 10,000 products, 5 users, GST billing, all reports
+  - **Enterprise**: unlimited products, unlimited users, API access, priority support
+- Subscription status tracked per business account
+- Expiry alerts (7 days, 1 day before)
+- Grace period: 7 days after expiry (read-only mode)
+- Razorpay or Stripe integration placeholder (payment gateway ready)
+
+---
+
+## 🏢 MULTI-TENANT / MULTI-BUSINESS SUPPORT
+
+- Each business has isolated data (schema-level or row-level separation)
+- Super Admin can manage all businesses
+- Business profile: name, address, GSTIN, logo, bank details (for invoice footer)
+
+---
+
+## 🎨 UI / UX REQUIREMENTS
+
+- Clean, modern dashboard with:
+  - KPI cards: Today's Sales, Today's Purchases, Low Stock Items, Pending Payments
+  - Sales trend chart (last 30 days)
+  - Top products widget
+  - Recent transactions list
+- Responsive design (desktop + tablet)
+- Dark mode toggle
+- Toast notifications for all actions
+- Confirmation modals for delete operations
+- Loading skeletons for data fetches
+- Empty state illustrations
+
+---
+
+## 📁 FOLDER STRUCTURE
+/client          → React frontend
+/server          → Express backend
+/routes
+/controllers
+/middleware
+/models (Drizzle schemas)
+/utils
+/drizzle         → DB migrations
+README.md        → Full setup guide
+.env.example     → All required env vars listed
+
+---
+
+## 📄 README.md MUST INCLUDE:
+- Project overview
+- Features list
+- Tech stack
+- Local setup instructions (step by step)
+- Environment variables explanation
+- Database migration commands
+- Default login credentials
+- API endpoint documentation (brief)
+- Deployment guide (for VPS / cloud)
+- Folder structure explanation
+
+---
+
+## ⚙️ PERFORMANCE REQUIREMENTS
+- All list pages must use **server-side pagination** (limit/offset or cursor-based)
+- Database indexes on: product name, SKU, category, date fields, user ID
+- API response time < 300ms for paginated lists
+- Use connection pooling for PostgreSQL
+- Lazy load heavy report pages
+
+---
+
+## 🔐 DEFAULT SEED DATA
+On first run, seed:
+- 1 Super Admin account (email: admin@demo.com, password: Admin@123)
+- 5 sample product categories
+- 10 sample products with varied units
+- 2 sample suppliers
+- Demo GST rates (5%, 12%, 18%, 28%)
+
+Generate complete, working, production-ready code. Do not use placeholder comments — implement every feature fully.

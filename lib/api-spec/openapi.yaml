@@ -1,0 +1,2369 @@
+openapi: 3.1.0
+info:
+  title: Api
+  version: 0.1.0
+  description: Inventory Management System API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: auth
+    description: Authentication
+  - name: users
+    description: User management
+  - name: categories
+    description: Product categories
+  - name: products
+    description: Product management
+  - name: suppliers
+    description: Supplier management
+  - name: customers
+    description: Customer management
+  - name: purchases
+    description: Purchase management
+  - name: sales
+    description: Sales management
+  - name: dashboard
+    description: Dashboard stats
+  - name: reports
+    description: Reports
+  - name: business
+    description: Business profile
+
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/refresh:
+    post:
+      operationId: refreshToken
+      tags: [auth]
+      summary: Refresh access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginResponse"
+
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Logout
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Logged out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      tags: [auth]
+      summary: Get current user
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users:
+    get:
+      operationId: listUsers
+      tags: [users]
+      summary: List users
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Users list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedUsers"
+    post:
+      operationId: createUser
+      tags: [users]
+      summary: Create user
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+
+  /users/{id}:
+    get:
+      operationId: getUser
+      tags: [users]
+      summary: Get user
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    patch:
+      operationId: updateUser
+      tags: [users]
+      summary: Update user
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+      responses:
+        "200":
+          description: User updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+    delete:
+      operationId: deleteUser
+      tags: [users]
+      summary: Delete user
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: User deleted
+
+  /categories:
+    get:
+      operationId: listCategories
+      tags: [categories]
+      summary: List categories
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Categories list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Category"
+    post:
+      operationId: createCategory
+      tags: [categories]
+      summary: Create category
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCategoryRequest"
+      responses:
+        "201":
+          description: Category created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+
+  /categories/{id}:
+    patch:
+      operationId: updateCategory
+      tags: [categories]
+      summary: Update category
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCategoryRequest"
+      responses:
+        "200":
+          description: Category updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+    delete:
+      operationId: deleteCategory
+      tags: [categories]
+      summary: Delete category
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Category deleted
+
+  /products:
+    get:
+      operationId: listProducts
+      tags: [products]
+      summary: List products
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: categoryId
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, inactive]
+        - name: lowStock
+          in: query
+          schema:
+            type: boolean
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            default: name
+        - name: sortOrder
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+      responses:
+        "200":
+          description: Products list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedProducts"
+    post:
+      operationId: createProduct
+      tags: [products]
+      summary: Create product
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProductRequest"
+      responses:
+        "201":
+          description: Product created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+
+  /products/{id}:
+    get:
+      operationId: getProduct
+      tags: [products]
+      summary: Get product
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Product details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+    patch:
+      operationId: updateProduct
+      tags: [products]
+      summary: Update product
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProductRequest"
+      responses:
+        "200":
+          description: Product updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+    delete:
+      operationId: deleteProduct
+      tags: [products]
+      summary: Delete product
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Product deleted
+
+  /suppliers:
+    get:
+      operationId: listSuppliers
+      tags: [suppliers]
+      summary: List suppliers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Suppliers list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedSuppliers"
+    post:
+      operationId: createSupplier
+      tags: [suppliers]
+      summary: Create supplier
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSupplierRequest"
+      responses:
+        "201":
+          description: Supplier created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Supplier"
+
+  /suppliers/{id}:
+    get:
+      operationId: getSupplier
+      tags: [suppliers]
+      summary: Get supplier
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Supplier details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Supplier"
+    patch:
+      operationId: updateSupplier
+      tags: [suppliers]
+      summary: Update supplier
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSupplierRequest"
+      responses:
+        "200":
+          description: Supplier updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Supplier"
+    delete:
+      operationId: deleteSupplier
+      tags: [suppliers]
+      summary: Delete supplier
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Supplier deleted
+
+  /customers:
+    get:
+      operationId: listCustomers
+      tags: [customers]
+      summary: List customers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Customers list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedCustomers"
+    post:
+      operationId: createCustomer
+      tags: [customers]
+      summary: Create customer
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCustomerRequest"
+      responses:
+        "201":
+          description: Customer created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+
+  /customers/{id}:
+    get:
+      operationId: getCustomer
+      tags: [customers]
+      summary: Get customer
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Customer details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+    patch:
+      operationId: updateCustomer
+      tags: [customers]
+      summary: Update customer
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCustomerRequest"
+      responses:
+        "200":
+          description: Customer updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+    delete:
+      operationId: deleteCustomer
+      tags: [customers]
+      summary: Delete customer
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Customer deleted
+
+  /purchases:
+    get:
+      operationId: listPurchases
+      tags: [purchases]
+      summary: List purchases
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: supplierId
+          in: query
+          schema:
+            type: integer
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, paid, partial]
+      responses:
+        "200":
+          description: Purchases list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedPurchases"
+    post:
+      operationId: createPurchase
+      tags: [purchases]
+      summary: Create purchase
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePurchaseRequest"
+      responses:
+        "201":
+          description: Purchase created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Purchase"
+
+  /purchases/{id}:
+    get:
+      operationId: getPurchase
+      tags: [purchases]
+      summary: Get purchase
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Purchase details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PurchaseDetail"
+    patch:
+      operationId: updatePurchase
+      tags: [purchases]
+      summary: Update purchase
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePurchaseRequest"
+      responses:
+        "200":
+          description: Purchase updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Purchase"
+    delete:
+      operationId: deletePurchase
+      tags: [purchases]
+      summary: Delete purchase
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Purchase deleted
+
+  /sales:
+    get:
+      operationId: listSales
+      tags: [sales]
+      summary: List sales
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: customerId
+          in: query
+          schema:
+            type: integer
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, paid, partial]
+      responses:
+        "200":
+          description: Sales list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaginatedSales"
+    post:
+      operationId: createSale
+      tags: [sales]
+      summary: Create sale
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSaleRequest"
+      responses:
+        "201":
+          description: Sale created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sale"
+
+  /sales/{id}:
+    get:
+      operationId: getSale
+      tags: [sales]
+      summary: Get sale
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Sale details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SaleDetail"
+    patch:
+      operationId: updateSale
+      tags: [sales]
+      summary: Update sale
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSaleRequest"
+      responses:
+        "200":
+          description: Sale updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Sale"
+    delete:
+      operationId: deleteSale
+      tags: [sales]
+      summary: Delete sale
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Sale deleted
+
+  /sales/{id}/invoice-pdf:
+    get:
+      operationId: getSaleInvoicePdf
+      tags: [sales]
+      summary: Download sale invoice as PDF
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: PDF file
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+
+  /dashboard/stats:
+    get:
+      operationId: getDashboardStats
+      tags: [dashboard]
+      summary: Get dashboard statistics
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
+  /dashboard/sales-trend:
+    get:
+      operationId: getSalesTrend
+      tags: [dashboard]
+      summary: Get sales trend for last 30 days
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Sales trend data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SalesTrendPoint"
+
+  /dashboard/top-products:
+    get:
+      operationId: getTopProducts
+      tags: [dashboard]
+      summary: Get top selling products
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Top products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TopProduct"
+
+  /dashboard/recent-transactions:
+    get:
+      operationId: getRecentTransactions
+      tags: [dashboard]
+      summary: Get recent transactions
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Recent transactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RecentTransaction"
+
+  /reports/sales-summary:
+    get:
+      operationId: getSalesSummaryReport
+      tags: [reports]
+      summary: Sales summary report
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [daily, weekly, monthly, annual]
+            default: monthly
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Sales summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SalesSummaryReport"
+
+  /reports/purchase-summary:
+    get:
+      operationId: getPurchaseSummaryReport
+      tags: [reports]
+      summary: Purchase summary report
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Purchase summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PurchaseSummaryReport"
+
+  /reports/inventory:
+    get:
+      operationId: getInventoryReport
+      tags: [reports]
+      summary: Inventory report
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [current, low-stock, out-of-stock, dead-stock, valuation]
+            default: current
+        - name: categoryId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Inventory report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InventoryReport"
+
+  /reports/gst-summary:
+    get:
+      operationId: getGstSummaryReport
+      tags: [reports]
+      summary: GST summary report
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: month
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: year
+          in: query
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: GST summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GstSummaryReport"
+
+  /business:
+    get:
+      operationId: getBusinessProfile
+      tags: [business]
+      summary: Get business profile
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Business profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessProfile"
+    patch:
+      operationId: updateBusinessProfile
+      tags: [business]
+      summary: Update business profile
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBusinessRequest"
+      responses:
+        "200":
+          description: Business profile updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessProfile"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    SuccessResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required:
+        - message
+
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+      required:
+        - email
+        - password
+
+    LoginResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        user:
+          $ref: "#/components/schemas/User"
+      required:
+        - accessToken
+        - refreshToken
+        - user
+
+    RefreshRequest:
+      type: object
+      properties:
+        refreshToken:
+          type: string
+      required:
+        - refreshToken
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [super_admin, admin, store_keeper, accountant, viewer]
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - email
+        - role
+        - active
+        - createdAt
+
+    PaginatedUsers:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+        totalPages:
+          type: integer
+      required:
+        - data
+        - total
+        - page
+        - limit
+        - totalPages
+
+    CreateUserRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        role:
+          type: string
+          enum: [super_admin, admin, store_keeper, accountant, viewer]
+      required:
+        - name
+        - email
+        - password
+        - role
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        role:
+          type: string
+          enum: [super_admin, admin, store_keeper, accountant, viewer]
+        active:
+          type: boolean
+
+    Category:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        productCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - productCount
+        - createdAt
+
+    CreateCategoryRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+      required:
+        - name
+
+    Product:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        categoryId:
+          type: ["integer", "null"]
+        categoryName:
+          type: ["string", "null"]
+        brand:
+          type: ["string", "null"]
+        hsnCode:
+          type: ["string", "null"]
+        unit:
+          type: string
+          enum: [gm, kg, ltr, ml, pcs, tonne, meter, feet, box, dozen, pack]
+        purchasePrice:
+          type: number
+        sellingPrice:
+          type: number
+        mrp:
+          type: number
+        gstRate:
+          type: number
+        currentStock:
+          type: number
+        minStockAlert:
+          type: number
+        location:
+          type: ["string", "null"]
+        sku:
+          type: ["string", "null"]
+        supplierId:
+          type: ["integer", "null"]
+        supplierName:
+          type: ["string", "null"]
+        expiryDate:
+          type: ["string", "null"]
+          format: date
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - unit
+        - purchasePrice
+        - sellingPrice
+        - mrp
+        - gstRate
+        - currentStock
+        - minStockAlert
+        - active
+        - createdAt
+
+    PaginatedProducts:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Product"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+        totalPages:
+          type: integer
+      required:
+        - data
+        - total
+        - page
+        - limit
+        - totalPages
+
+    CreateProductRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        categoryId:
+          type: integer
+        brand:
+          type: string
+        hsnCode:
+          type: string
+        unit:
+          type: string
+          enum: [gm, kg, ltr, ml, pcs, tonne, meter, feet, box, dozen, pack]
+        purchasePrice:
+          type: number
+        sellingPrice:
+          type: number
+        mrp:
+          type: number
+        gstRate:
+          type: number
+        currentStock:
+          type: number
+          default: 0
+        minStockAlert:
+          type: number
+          default: 10
+        location:
+          type: string
+        sku:
+          type: string
+        supplierId:
+          type: integer
+        expiryDate:
+          type: string
+          format: date
+      required:
+        - name
+        - unit
+        - purchasePrice
+        - sellingPrice
+        - mrp
+        - gstRate
+
+    UpdateProductRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        categoryId:
+          type: integer
+        brand:
+          type: string
+        hsnCode:
+          type: string
+        unit:
+          type: string
+          enum: [gm, kg, ltr, ml, pcs, tonne, meter, feet, box, dozen, pack]
+        purchasePrice:
+          type: number
+        sellingPrice:
+          type: number
+        mrp:
+          type: number
+        gstRate:
+          type: number
+        currentStock:
+          type: number
+        minStockAlert:
+          type: number
+        location:
+          type: string
+        sku:
+          type: string
+        supplierId:
+          type: integer
+        expiryDate:
+          type: string
+          format: date
+        active:
+          type: boolean
+
+    Supplier:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        contactPerson:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        gstin:
+          type: ["string", "null"]
+        state:
+          type: ["string", "null"]
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - active
+        - createdAt
+
+    PaginatedSuppliers:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Supplier"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+        totalPages:
+          type: integer
+      required:
+        - data
+        - total
+        - page
+        - limit
+        - totalPages
+
+    CreateSupplierRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        contactPerson:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        address:
+          type: string
+        gstin:
+          type: string
+        state:
+          type: string
+      required:
+        - name
+
+    Customer:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        address:
+          type: ["string", "null"]
+        gstin:
+          type: ["string", "null"]
+        state:
+          type: ["string", "null"]
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - name
+        - active
+        - createdAt
+
+    PaginatedCustomers:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Customer"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+        totalPages:
+          type: integer
+      required:
+        - data
+        - total
+        - page
+        - limit
+        - totalPages
+
+    CreateCustomerRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        address:
+          type: string
+        gstin:
+          type: string
+        state:
+          type: string
+      required:
+        - name
+
+    PurchaseItem:
+      type: object
+      properties:
+        productId:
+          type: integer
+        productName:
+          type: string
+        quantity:
+          type: number
+        unit:
+          type: string
+        unitPrice:
+          type: number
+        discount:
+          type: number
+        gstRate:
+          type: number
+        cgst:
+          type: number
+        sgst:
+          type: number
+        igst:
+          type: number
+        total:
+          type: number
+      required:
+        - productId
+        - productName
+        - quantity
+        - unit
+        - unitPrice
+        - gstRate
+        - total
+
+    Purchase:
+      type: object
+      properties:
+        id:
+          type: integer
+        invoiceNo:
+          type: string
+        invoiceDate:
+          type: string
+          format: date
+        supplierId:
+          type: integer
+        supplierName:
+          type: string
+        subtotal:
+          type: number
+        taxAmount:
+          type: number
+        discount:
+          type: number
+        grandTotal:
+          type: number
+        paidAmount:
+          type: number
+        balanceDue:
+          type: number
+        paymentStatus:
+          type: string
+          enum: [pending, paid, partial]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - invoiceNo
+        - invoiceDate
+        - supplierId
+        - supplierName
+        - subtotal
+        - taxAmount
+        - grandTotal
+        - paidAmount
+        - balanceDue
+        - paymentStatus
+        - createdAt
+
+    PurchaseDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        invoiceNo:
+          type: string
+        invoiceDate:
+          type: string
+          format: date
+        supplierId:
+          type: integer
+        supplierName:
+          type: string
+        subtotal:
+          type: number
+        taxAmount:
+          type: number
+        discount:
+          type: number
+        grandTotal:
+          type: number
+        paidAmount:
+          type: number
+        balanceDue:
+          type: number
+        paymentStatus:
+          type: string
+          enum: [pending, paid, partial]
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PurchaseItem"
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - invoiceNo
+        - invoiceDate
+        - supplierId
+        - supplierName
+        - subtotal
+        - taxAmount
+        - grandTotal
+        - paidAmount
+        - balanceDue
+        - paymentStatus
+        - items
+        - createdAt
+
+    PaginatedPurchases:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Purchase"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+        totalPages:
+          type: integer
+      required:
+        - data
+        - total
+        - page
+        - limit
+        - totalPages
+
+    CreatePurchaseRequest:
+      type: object
+      properties:
+        invoiceNo:
+          type: string
+        invoiceDate:
+          type: string
+          format: date
+        supplierId:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreatePurchaseItemRequest"
+        discount:
+          type: number
+          default: 0
+        paidAmount:
+          type: number
+          default: 0
+        isInterState:
+          type: boolean
+          default: false
+      required:
+        - invoiceNo
+        - invoiceDate
+        - supplierId
+        - items
+
+    CreatePurchaseItemRequest:
+      type: object
+      properties:
+        productId:
+          type: integer
+        quantity:
+          type: number
+        unitPrice:
+          type: number
+        discount:
+          type: number
+          default: 0
+      required:
+        - productId
+        - quantity
+        - unitPrice
+
+    UpdatePurchaseRequest:
+      type: object
+      properties:
+        paidAmount:
+          type: number
+        paymentStatus:
+          type: string
+          enum: [pending, paid, partial]
+
+    SaleItem:
+      type: object
+      properties:
+        productId:
+          type: integer
+        productName:
+          type: string
+        quantity:
+          type: number
+        unit:
+          type: string
+        unitPrice:
+          type: number
+        discount:
+          type: number
+        gstRate:
+          type: number
+        cgst:
+          type: number
+        sgst:
+          type: number
+        igst:
+          type: number
+        hsnCode:
+          type: ["string", "null"]
+        total:
+          type: number
+      required:
+        - productId
+        - productName
+        - quantity
+        - unit
+        - unitPrice
+        - gstRate
+        - total
+
+    Sale:
+      type: object
+      properties:
+        id:
+          type: integer
+        invoiceNo:
+          type: string
+        saleDate:
+          type: string
+          format: date
+        customerId:
+          type: ["integer", "null"]
+        customerName:
+          type: string
+        customerPhone:
+          type: ["string", "null"]
+        customerAddress:
+          type: ["string", "null"]
+        customerGstin:
+          type: ["string", "null"]
+        subtotal:
+          type: number
+        taxAmount:
+          type: number
+        discount:
+          type: number
+        grandTotal:
+          type: number
+        paidAmount:
+          type: number
+        balanceDue:
+          type: number
+        paymentStatus:
+          type: string
+          enum: [pending, paid, partial]
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - invoiceNo
+        - saleDate
+        - customerName
+        - subtotal
+        - taxAmount
+        - grandTotal
+        - paidAmount
+        - balanceDue
+        - paymentStatus
+        - createdAt
+
+    SaleDetail:
+      type: object
+      properties:
+        id:
+          type: integer
+        invoiceNo:
+          type: string
+        saleDate:
+          type: string
+          format: date
+        customerId:
+          type: ["integer", "null"]
+        customerName:
+          type: string
+        customerPhone:
+          type: ["string", "null"]
+        customerAddress:
+          type: ["string", "null"]
+        customerGstin:
+          type: ["string", "null"]
+        subtotal:
+          type: number
+        taxAmount:
+          type: number
+        discount:
+          type: number
+        grandTotal:
+          type: number
+        paidAmount:
+          type: number
+        balanceDue:
+          type: number
+        paymentStatus:
+          type: string
+          enum: [pending, paid, partial]
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/SaleItem"
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - invoiceNo
+        - saleDate
+        - customerName
+        - subtotal
+        - taxAmount
+        - grandTotal
+        - paidAmount
+        - balanceDue
+        - paymentStatus
+        - items
+        - createdAt
+
+    PaginatedSales:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Sale"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+        totalPages:
+          type: integer
+      required:
+        - data
+        - total
+        - page
+        - limit
+        - totalPages
+
+    CreateSaleRequest:
+      type: object
+      properties:
+        saleDate:
+          type: string
+          format: date
+        customerId:
+          type: integer
+        customerName:
+          type: string
+        customerPhone:
+          type: string
+        customerAddress:
+          type: string
+        customerGstin:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/CreateSaleItemRequest"
+        discount:
+          type: number
+          default: 0
+        paidAmount:
+          type: number
+          default: 0
+        isInterState:
+          type: boolean
+          default: false
+      required:
+        - saleDate
+        - customerName
+        - items
+
+    CreateSaleItemRequest:
+      type: object
+      properties:
+        productId:
+          type: integer
+        quantity:
+          type: number
+        unitPrice:
+          type: number
+        discount:
+          type: number
+          default: 0
+      required:
+        - productId
+        - quantity
+        - unitPrice
+
+    UpdateSaleRequest:
+      type: object
+      properties:
+        paidAmount:
+          type: number
+        paymentStatus:
+          type: string
+          enum: [pending, paid, partial]
+
+    DashboardStats:
+      type: object
+      properties:
+        todaySales:
+          type: number
+        todayPurchases:
+          type: number
+        lowStockItems:
+          type: integer
+        pendingPayments:
+          type: number
+        totalProducts:
+          type: integer
+        totalCustomers:
+          type: integer
+        totalSuppliers:
+          type: integer
+        monthlyRevenue:
+          type: number
+      required:
+        - todaySales
+        - todayPurchases
+        - lowStockItems
+        - pendingPayments
+        - totalProducts
+        - totalCustomers
+        - totalSuppliers
+        - monthlyRevenue
+
+    SalesTrendPoint:
+      type: object
+      properties:
+        date:
+          type: string
+        sales:
+          type: number
+        purchases:
+          type: number
+      required:
+        - date
+        - sales
+        - purchases
+
+    TopProduct:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        totalQuantity:
+          type: number
+        totalRevenue:
+          type: number
+      required:
+        - id
+        - name
+        - totalQuantity
+        - totalRevenue
+
+    RecentTransaction:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: [sale, purchase]
+        invoiceNo:
+          type: string
+        partyName:
+          type: string
+        amount:
+          type: number
+        date:
+          type: string
+          format: date
+      required:
+        - id
+        - type
+        - invoiceNo
+        - partyName
+        - amount
+        - date
+
+    SalesSummaryReport:
+      type: object
+      properties:
+        totalSales:
+          type: number
+        totalTax:
+          type: number
+        totalDiscount:
+          type: number
+        netAmount:
+          type: number
+        transactionCount:
+          type: integer
+        breakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/SalesSummaryBreakdown"
+      required:
+        - totalSales
+        - totalTax
+        - totalDiscount
+        - netAmount
+        - transactionCount
+        - breakdown
+
+    SalesSummaryBreakdown:
+      type: object
+      properties:
+        period:
+          type: string
+        sales:
+          type: number
+        tax:
+          type: number
+        count:
+          type: integer
+      required:
+        - period
+        - sales
+        - tax
+        - count
+
+    PurchaseSummaryReport:
+      type: object
+      properties:
+        totalPurchases:
+          type: number
+        totalTax:
+          type: number
+        totalDiscount:
+          type: number
+        netAmount:
+          type: number
+        transactionCount:
+          type: integer
+        pendingPayments:
+          type: number
+      required:
+        - totalPurchases
+        - totalTax
+        - totalDiscount
+        - netAmount
+        - transactionCount
+        - pendingPayments
+
+    InventoryReport:
+      type: object
+      properties:
+        totalItems:
+          type: integer
+        totalValue:
+          type: number
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InventoryReportItem"
+      required:
+        - totalItems
+        - totalValue
+        - items
+
+    InventoryReportItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        sku:
+          type: ["string", "null"]
+        category:
+          type: ["string", "null"]
+        currentStock:
+          type: number
+        unit:
+          type: string
+        purchasePrice:
+          type: number
+        sellingPrice:
+          type: number
+        stockValue:
+          type: number
+        minStockAlert:
+          type: number
+        lastMovement:
+          type: ["string", "null"]
+          format: date-time
+      required:
+        - id
+        - name
+        - currentStock
+        - unit
+        - purchasePrice
+        - sellingPrice
+        - stockValue
+        - minStockAlert
+
+    GstSummaryReport:
+      type: object
+      properties:
+        month:
+          type: integer
+        year:
+          type: integer
+        outputTax:
+          type: number
+        inputTax:
+          type: number
+        netPayable:
+          type: number
+        salesBreakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/GstRateBreakdown"
+        purchaseBreakdown:
+          type: array
+          items:
+            $ref: "#/components/schemas/GstRateBreakdown"
+      required:
+        - month
+        - year
+        - outputTax
+        - inputTax
+        - netPayable
+        - salesBreakdown
+        - purchaseBreakdown
+
+    GstRateBreakdown:
+      type: object
+      properties:
+        gstRate:
+          type: number
+        taxableAmount:
+          type: number
+        cgst:
+          type: number
+        sgst:
+          type: number
+        igst:
+          type: number
+        totalTax:
+          type: number
+      required:
+        - gstRate
+        - taxableAmount
+        - cgst
+        - sgst
+        - igst
+        - totalTax
+
+    BusinessProfile:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        address:
+          type: ["string", "null"]
+        gstin:
+          type: ["string", "null"]
+        state:
+          type: ["string", "null"]
+        phone:
+          type: ["string", "null"]
+        email:
+          type: ["string", "null"]
+        bankName:
+          type: ["string", "null"]
+        bankAccount:
+          type: ["string", "null"]
+        bankIfsc:
+          type: ["string", "null"]
+        invoicePrefix:
+          type: string
+        nextInvoiceNum:
+          type: integer
+      required:
+        - id
+        - name
+        - invoicePrefix
+        - nextInvoiceNum
+
+    UpdateBusinessRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        address:
+          type: string
+        gstin:
+          type: string
+        state:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        bankName:
+          type: string
+        bankAccount:
+          type: string
+        bankIfsc:
+          type: string
+        invoicePrefix:
+          type: string
