@@ -225,10 +225,10 @@ export default function Products() {
               <div className="space-y-2">
                 <Label>Category</Label>
                 <Controller name="categoryId" control={control} render={({field}) => (
-                  <Select value={field.value?.toString() || ""} onValueChange={field.onChange}>
+                  <Select value={field.value?.toString() || "__none__"} onValueChange={v => field.onChange(v === "__none__" ? "" : v)}>
                     <SelectTrigger><SelectValue placeholder="Select Category" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
+                      <SelectItem value="__none__">None</SelectItem>
                       {categories?.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -295,10 +295,10 @@ export default function Products() {
               <div className="space-y-2">
                 <Label>Supplier</Label>
                 <Controller name="supplierId" control={control} render={({field}) => (
-                  <Select value={field.value?.toString() || ""} onValueChange={field.onChange}>
+                  <Select value={field.value?.toString() || "__none__"} onValueChange={v => field.onChange(v === "__none__" ? "" : v)}>
                     <SelectTrigger><SelectValue placeholder="Select Supplier" /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">None</SelectItem>
+                      <SelectItem value="__none__">None</SelectItem>
                       {suppliers.map(s => <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
