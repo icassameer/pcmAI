@@ -51,8 +51,9 @@ export default function Products() {
   const updateMutation = useUpdateProduct();
   const deleteMutation = useDeleteProduct();
 
-  const { register, handleSubmit, control, reset, formState: { errors } } = useForm<ProductFormData>({
-    resolver: zodResolver(productSchema),
+  const { register, handleSubmit, control, reset, formState: { errors } } = useForm<ProductFormData, unknown, ProductFormData>({
+    // @ts-ignore  
+    resolver: zodResolver(productSchema) as any,
     defaultValues: { unit: "pcs", currentStock: 0, minStockAlert: 10, gstRate: 18 }
   });
 

@@ -44,7 +44,7 @@ export * from "./listSalesStatus";
 export * from "./listSuppliersParams";
 export * from "./listUsersParams";
 export * from "./loginRequest";
-export * from "./loginResponse";
+export type * from "./loginResponse";
 export * from "./paginatedCustomers";
 export * from "./paginatedProducts";
 export * from "./paginatedPurchases";
