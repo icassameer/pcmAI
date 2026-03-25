@@ -1,7 +1,7 @@
 # SOP — InventoPro Development & Setup
 **Standard Operating Procedure**  
 **Project:** InventoPro — Inventory Management System  
-**Version:** 2.0  
+**Version:** 3.0  
 **Last Updated:** March 2026  
 
 ---
@@ -18,9 +18,11 @@
 8. [Adding New Features](#8-adding-new-features)
 9. [API Codegen Workflow](#9-api-codegen-workflow)
 10. [Build & Typecheck](#10-build--typecheck)
-11. [Server Deployment (VPS)](#11-server-deployment-vps) ← 🔜 Next Session
-12. [Troubleshooting](#12-troubleshooting)
-13. [Environment Variables Reference](#13-environment-variables-reference)
+11. [Server Deployment (VPS)](#11-server-deployment-vps) ✅ Completed Session 3
+12. [Redeployment Workflow](#12-redeployment-workflow)
+13. [Troubleshooting](#13-troubleshooting)
+14. [Environment Variables Reference](#14-environment-variables-reference)
+15. [Planned Improvements](#15-planned-improvements)
 
 ---
 
@@ -125,7 +127,7 @@ psql -U postgres -c "CREATE DATABASE inventopro;"
 Create `artifacts/api-server/.env`:
 ```env
 DATABASE_URL=postgresql://postgres:yourpassword@localhost:5432/inventopro
-JWT_ACCESS_SECRET=your-long-random-access-secret
+JWT_SECRET=your-long-random-secret
 JWT_REFRESH_SECRET=your-long-random-refresh-secret
 PORT=8080
 
@@ -136,11 +138,19 @@ AI_INTEGRATIONS_OPENAI_API_KEY=sk-your-openai-key-here
 
 > ⚠️ **Never commit `.env` to GitHub.** It is already in `.gitignore`.
 
-> 💡 Generate strong secrets:
+> ⚠️ **Important:** The correct variable name is `JWT_SECRET` (not `JWT_ACCESS_SECRET`). Using the wrong name will cause tokens to not persist across server restarts.
+
+> 💡 Generate strong secrets using Node.js (use this method to avoid truncation):
 > ```powershell
-> node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+> node -e "
+> const crypto = require('crypto');
+> const fs = require('fs');
+> const s1 = crypto.randomBytes(64).toString('hex');
+> const s2 = crypto.randomBytes(64).toString('hex');
+> console.log('JWT_SECRET=' + s1);
+> console.log('JWT_REFRESH_SECRET=' + s2);
+> "
 > ```
-> Run twice — once for ACCESS_SECRET, once for REFRESH_SECRET.
 
 ### Step 4 — Run database migrations
 
@@ -173,7 +183,7 @@ cd C:\path\to\pcmAI
 
 # Set environment variables (required every session)
 $env:DATABASE_URL="postgresql://postgres:yourpassword@localhost:5432/inventopro"
-$env:JWT_ACCESS_SECRET="your-access-secret"
+$env:JWT_SECRET="your-secret"
 $env:JWT_REFRESH_SECRET="your-refresh-secret"
 $env:PORT="8080"
 
@@ -221,7 +231,7 @@ pnpm install
 
 # 4. Terminal 1 — Start API (with env vars)
 $env:DATABASE_URL="postgresql://postgres:yourpassword@localhost:5432/inventopro"
-$env:JWT_ACCESS_SECRET="your-access-secret"
+$env:JWT_SECRET="your-secret"
 $env:JWT_REFRESH_SECRET="your-refresh-secret"
 $env:PORT="8080"
 pnpm --filter @workspace/api-server run dev
@@ -327,69 +337,205 @@ pnpm --filter @workspace/inventory-app run typecheck
 
 ## 11. Server Deployment (VPS)
 
-> 🔜 **Planned for next session — Session 3**
+> ✅ **Completed — Session 3 (March 2026)**
 
-### Planned deployment stack
+### Production Server Details
+
+| Item | Value |
+|------|-------|
+| Provider | Hostbet |
+| OS | Ubuntu 24.04 LTS |
+| Server IP | 203.174.22.119 |
+| App URL | https://pms.icaweb.in |
+| App directory | `/var/www/inventopro` |
+| Process Manager | PM2 (ecosystem.config.js) |
+| Reverse Proxy | Nginx |
+| SSL | Let's Encrypt (auto-renews) |
+| Database | PostgreSQL 16 (inventopro db) |
+| DNS | Cloudflare (DNS only, grey cloud) |
+
+### Deployment Stack
+
 | Component | Tool |
 |-----------|------|
-| Server OS | Ubuntu 22.04 LTS |
-| Process Manager | PM2 |
-| Reverse Proxy | Nginx |
+| Server OS | Ubuntu 24.04 LTS |
+| Node.js | v24.14.0 |
+| pnpm | v10.33.0 |
+| Process Manager | PM2 v6 (ecosystem.config.js) |
+| Reverse Proxy | Nginx 1.24 |
 | SSL Certificate | Let's Encrypt (Certbot) |
-| Database | PostgreSQL (on server) |
+| Database | PostgreSQL 16 |
 
-### Planned steps (next session)
+### First-Time Deployment Steps (for reference)
 
-**Part A — Server Provisioning**
-1. Provision VPS (DigitalOcean / AWS / Hetzner / any provider)
-2. SSH into server
-3. Install Node.js 24, pnpm, Git
-4. Install PostgreSQL 16
-5. Install Nginx
-6. Install PM2: `npm install -g pm2`
+**Part A — Server Prep (Ubuntu)**
+```bash
+# Upgrade Node to v24
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
+sudo apt-get install -y nodejs
 
-**Part B — App Deployment**
-1. Clone repo: `git clone https://github.com/icassameer/pcmAI.git`
-2. `cd pcmAI && pnpm install`
-3. Create `.env` at `artifacts/api-server/.env` with production values
-4. Set DATABASE_URL and run migrations
-5. Seed database (first time only)
-6. Build API: `pnpm --filter @workspace/api-server run build`
-7. Build frontend: `pnpm --filter @workspace/inventory-app run build`
+# Install pnpm
+npm install -g pnpm
 
-**Part C — Process Management (PM2)**
-1. Create `ecosystem.config.js` for PM2
-2. Start API: `pm2 start ecosystem.config.js`
-3. Save PM2 config: `pm2 save`
-4. Enable PM2 on startup: `pm2 startup`
+# Verify
+node --version   # v24.x.x
+pnpm --version   # 10.x.x
+```
 
-**Part D — Nginx Configuration**
-1. Configure Nginx to serve frontend `dist/` as static files
-2. Proxy `/api` requests to `http://localhost:8080`
-3. Test config: `nginx -t`
-4. Reload: `systemctl reload nginx`
+**Part B — Database**
+```bash
+# Create database (use sudo -u postgres if peer auth fails)
+sudo -u postgres psql -c "CREATE DATABASE inventopro;"
 
-**Part E — SSL Setup**
-1. Point domain DNS to server IP
-2. Install Certbot
-3. Run: `certbot --nginx -d yourdomain.com`
-4. Auto-renewal is configured by Certbot
+# Set postgres password
+sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'yourpassword';"
+```
 
-**Part F — Security**
-1. Configure UFW firewall — only allow ports 22, 80, 443
-2. Change PostgreSQL default password
-3. Set strong JWT secrets in production `.env`
-4. Set `NODE_ENV=production`
+**Part C — App Setup**
+```bash
+cd /var/www
+git clone https://github.com/icassameer/pcmAI.git inventopro
+cd inventopro
+pnpm install
 
-### Notes for deployment
-- Frontend `dist/` is in `.gitignore` — must build on server
-- Never use the same JWT secrets as local development
-- Set up database backups (pg_dump cron job)
-- Monitor logs with `pm2 logs`
+# Run migrations
+export DATABASE_URL="postgresql://postgres:yourpassword@localhost:5432/inventopro"
+pnpm --filter @workspace/db run push
+
+# Seed demo data (first time only)
+pnpm --filter @workspace/scripts run seed
+
+# Build
+pnpm --filter @workspace/api-server run build
+pnpm --filter @workspace/inventory-app run build
+```
+
+**Part D — Generate ecosystem.config.js**
+
+> ⚠️ Always use this Node.js method to generate secrets — shell `$()` truncates hex strings by 1 character.
+
+```bash
+node -e "
+const crypto = require('crypto');
+const fs = require('fs');
+const s1 = crypto.randomBytes(64).toString('hex');
+const s2 = crypto.randomBytes(64).toString('hex');
+const dbUrl = 'postgresql://postgres:yourpassword@localhost:5432/inventopro';
+const config = \`module.exports = {
+  apps: [{
+    name: 'inventopro-api',
+    script: 'artifacts/api-server/dist/index.mjs',
+    cwd: '/var/www/inventopro',
+    env: {
+      DATABASE_URL: '\${dbUrl}',
+      JWT_SECRET: '\${s1}',
+      JWT_REFRESH_SECRET: '\${s2}',
+      PORT: '8080'
+    }
+  }]
+};\`;
+fs.writeFileSync('/var/www/inventopro/ecosystem.config.js', config);
+fs.writeFileSync('artifacts/api-server/.env', \`DATABASE_URL=\${dbUrl}\nJWT_SECRET=\${s1}\nJWT_REFRESH_SECRET=\${s2}\nPORT=8080\n\`);
+console.log('Done! s1:', s1.length, 's2:', s2.length);
+"
+```
+
+```bash
+pm2 start ecosystem.config.js
+pm2 save
+pm2 startup
+```
+
+**Part E — Nginx Configuration**
+
+Create `/etc/nginx/sites-available/inventopro`:
+```nginx
+server {
+    listen 80;
+    server_name pms.icaweb.in;
+
+    root /var/www/inventopro/artifacts/inventory-app/dist;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location /api {
+        proxy_pass http://localhost:8080;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
+```
+
+```bash
+ln -s /etc/nginx/sites-available/inventopro /etc/nginx/sites-enabled/
+nginx -t
+systemctl reload nginx
+```
+
+**Part F — SSL**
+```bash
+apt install certbot python3-certbot-nginx -y
+certbot --nginx -d pms.icaweb.in
+```
+
+> ⚠️ DNS must be set to **DNS only (grey cloud)** in Cloudflare before running Certbot.
 
 ---
 
-## 12. Troubleshooting
+## 12. Redeployment Workflow
+
+Use this every time you push new code to GitHub and want to update production:
+
+```bash
+cd /var/www/inventopro
+
+# 1. Pull latest code
+git pull origin main
+
+# 2. Install any new dependencies
+pnpm install
+
+# 3. Build API
+pnpm --filter @workspace/api-server run build
+
+# 4. Build frontend
+pnpm --filter @workspace/inventory-app run build
+
+# 5. Restart API
+pm2 restart ecosystem.config.js
+
+# 6. Verify
+pm2 status
+pm2 logs inventopro-api --lines 10 --nostream
+```
+
+> ⚠️ The `ecosystem.config.js` holds all environment variables (JWT secrets, DATABASE_URL, PORT). It is NOT in git. If the server is reprovisioned, regenerate it using the Node.js method in Section 11 Part D.
+
+### Check production logs
+```bash
+pm2 logs inventopro-api          # live tail
+pm2 logs inventopro-api --lines 50 --nostream   # last 50 lines
+pm2 flush                        # clear all logs
+```
+
+### Restart / Stop
+```bash
+pm2 restart inventopro-api
+pm2 stop inventopro-api
+pm2 delete inventopro-api        # remove from PM2 (use only if reconfiguring)
+```
+
+---
+
+## 13. Troubleshooting
 
 ### `pnpm` not recognized
 ```powershell
@@ -445,8 +591,17 @@ netstat -ano | findstr :8080
 taskkill /PID <pid> /F
 ```
 
-### JWT tokens not persisting
-Set `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET` env vars before starting server.
+### JWT tokens not persisting across server restarts
+- Check that `JWT_SECRET` (not `JWT_ACCESS_SECRET`) is set
+- On local: set `$env:JWT_SECRET` before starting dev server
+- On production: verify `ecosystem.config.js` has `JWT_SECRET` in the `env` block
+- Run `pm2 env <id> | grep JWT` to confirm PM2 has the variable
+
+### `dotenv injecting env (0)` on production
+This is **normal and expected** when using `ecosystem.config.js` — PM2 injects all env vars before the app starts, so dotenv finds nothing left to load. As long as `pm2 env <id>` shows the correct variables, everything is fine.
+
+### JWT secret truncation on Linux
+Never use shell `$()` to generate and assign secrets — it strips the trailing newline, resulting in 127 instead of 128 hex chars. Always use the Node.js `fs.writeFileSync` method documented in Section 11 Part D.
 
 ### CRLF line ending warnings
 Already fixed via `.gitattributes`. If reappears:
@@ -459,16 +614,27 @@ git commit -m "chore: normalize line endings"
 ### `mockup-sandbox` typecheck error
 Expected — excluded from typecheck in root `package.json`. Do not add it back.
 
+### Peer authentication failed for PostgreSQL (Linux)
+```bash
+sudo -u postgres psql -c "YOUR COMMAND HERE;"
+```
+
+### PM2 process not starting after server reboot
+```bash
+pm2 startup    # generates systemd command — run the output command
+pm2 save       # saves current process list
+```
+
 ---
 
-## 13. Environment Variables Reference
+## 14. Environment Variables Reference
 
-### `artifacts/api-server/.env`
+### `artifacts/api-server/.env` (local development)
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `DATABASE_URL` | ✅ Yes | PostgreSQL connection string |
-| `JWT_ACCESS_SECRET` | ✅ Yes | Secret for signing access tokens |
+| `JWT_SECRET` | ✅ Yes | Secret for signing access tokens |
 | `JWT_REFRESH_SECRET` | ✅ Yes | Secret for signing refresh tokens |
 | `PORT` | ✅ Yes | API server port (use `8080`) |
 | `AI_INTEGRATIONS_OPENAI_BASE_URL` | ❌ Optional | OpenAI base URL |
@@ -476,30 +642,76 @@ Expected — excluded from typecheck in root `package.json`. Do not add it back.
 
 > ⚠️ On Windows, `DATABASE_URL` must also be set as `$env:DATABASE_URL` in PowerShell before running `db push`.
 
+> ⚠️ On production, environment variables are managed via `ecosystem.config.js` — NOT the `.env` file. The `.env` file is kept in sync but PM2 loads from `ecosystem.config.js`.
+
+### Production `ecosystem.config.js` (server only — never commit)
+
+Located at `/var/www/inventopro/ecosystem.config.js`. Contains all production secrets. Regenerate using the Node.js method in Section 11 Part D if lost.
+
+---
+
+## 15. Planned Improvements
+
+### UI Improvements
+- [ ] Improve dashboard layout and visual design
+- [ ] Better mobile responsiveness
+- [ ] Dark mode support
+- [ ] Improved data tables with better filtering and export options
+- [ ] Enhanced invoice PDF design and branding
+
+### AI Features
+- [ ] Fix/improve AI dashboard insights (currently requires OpenAI API key)
+- [ ] Add AI-powered low stock predictions
+- [ ] AI-assisted purchase order suggestions based on sales trends
+- [ ] Natural language search for products and transactions
+
+### Feature Additions
+- [ ] Customer portal for invoice viewing
+- [ ] WhatsApp/email invoice sharing
+- [ ] Multi-warehouse support
+- [ ] Barcode scanning support
+- [ ] Automated database backups (pg_dump cron job)
+- [ ] Create startup script to auto-load env vars locally (avoid manual `$env:` every session)
+
 ---
 
 ## Quick Reference Card
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-FIRST TIME SETUP:
+PRODUCTION:
+  URL:  https://pms.icaweb.in
+  Dir:  /var/www/inventopro
+  Login: admin@demo.com / Admin@123
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REDEPLOY (after git push):
+  cd /var/www/inventopro
+  git pull origin main
+  pnpm install
+  pnpm --filter @workspace/api-server run build
+  pnpm --filter @workspace/inventory-app run build
+  pm2 restart ecosystem.config.js
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FIRST TIME SETUP (local):
   git clone https://github.com/icassameer/pcmAI.git && cd pcmAI
   pnpm install
   psql -U postgres -c "CREATE DATABASE inventopro;"
-  # create artifacts/api-server/.env
+  # create artifacts/api-server/.env with JWT_SECRET (not JWT_ACCESS_SECRET)
   $env:DATABASE_URL="postgresql://postgres:pass@localhost:5432/inventopro"
   pnpm --filter @workspace/db run push
   pnpm --filter @workspace/scripts run seed
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-DAILY (Terminal 1 — API):
+DAILY LOCAL (Terminal 1 — API):
   $env:DATABASE_URL="postgresql://postgres:pass@localhost:5432/inventopro"
-  $env:JWT_ACCESS_SECRET="your-secret"
+  $env:JWT_SECRET="your-secret"
   $env:JWT_REFRESH_SECRET="your-secret"
   $env:PORT="8080"
   pnpm --filter @workspace/api-server run dev
 
-DAILY (Terminal 2 — Frontend):
+DAILY LOCAL (Terminal 2 — Frontend):
   pnpm --filter @workspace/inventory-app run dev
   → http://localhost:5173  (admin@demo.com / Admin@123)
 
@@ -509,14 +721,6 @@ BEFORE COMMITTING:
   git add .
   git commit -m "feat/fix/chore: description"
   git push origin main
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-NEXT SESSION — SERVER DEPLOYMENT:
-  → Provision VPS (Ubuntu 22.04)
-  → Install Node 24, pnpm, PostgreSQL, Nginx, PM2
-  → Clone repo, .env, migrations, build
-  → Nginx reverse proxy + PM2 process manager
-  → SSL with Certbot + domain DNS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
@@ -528,7 +732,7 @@ NEXT SESSION — SERVER DEPLOYMENT:
 |------|---------|---------------|
 | March 2026 | Session 1 | Removed Replit deps, fixed TypeScript errors, added README, pushed to GitHub |
 | March 2026 | Session 2 | PostgreSQL setup, DB migrations, seed data, fixed dotenv/vite proxy/cross-env, app running locally, normalized line endings, pushed to GitHub |
-| Next Session | Session 3 | 🔜 VPS deployment, Nginx, PM2, SSL, domain setup |
+| March 2026 | Session 3 | VPS deployment on Hostbet (Ubuntu 24.04), Node 24 upgrade, pnpm install, DB setup, builds, PM2 ecosystem.config.js, Nginx config, Cloudflare DNS, SSL via Certbot. App live at https://pms.icaweb.in |
 
 ---
 

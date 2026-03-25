@@ -2,6 +2,8 @@
 
 A full-stack GST billing and inventory management system for Indian businesses, built as a pnpm monorepo.
 
+**🌐 Live:** https://pms.icaweb.in
+
 ---
 
 ## Tech Stack
@@ -38,14 +40,15 @@ inventopro-source-code/
 │   └── integrations-openai-ai-server/  # OpenAI server-side helpers
 ├── scripts/
 │   └── src/seed.ts         # Database seed script
-├── .gitignore              # Ignores node_modules, dist, .env, tsbuildinfo
-├── .gitattributes          # Normalizes line endings (LF) across OS
-├── pnpm-workspace.yaml     # Workspace + catalog version config
-├── tsconfig.base.json      # Shared TS config (composite: true)
-├── tsconfig.json           # Root TS project references
-├── readme.md               # This file
-├── SOP-InventoPro.md       # Standard Operating Procedure
-└── package.json            # Root scripts
+├── ecosystem.config.js     # PM2 process config (production only — never commit)
+├── .gitignore
+├── .gitattributes
+├── pnpm-workspace.yaml
+├── tsconfig.base.json
+├── tsconfig.json
+├── readme.md
+├── SOP-InventoPro.md
+└── package.json
 ```
 
 ---
@@ -81,7 +84,7 @@ Create `.env` inside `artifacts/api-server/`:
 
 ```env
 DATABASE_URL=postgresql://postgres:yourpassword@localhost:5432/inventopro
-JWT_ACCESS_SECRET=your-long-random-access-secret
+JWT_SECRET=your-long-random-secret
 JWT_REFRESH_SECRET=your-long-random-refresh-secret
 PORT=8080
 
@@ -92,9 +95,17 @@ AI_INTEGRATIONS_OPENAI_API_KEY=sk-your-openai-key-here
 
 > ⚠️ Never commit `.env` to GitHub — it is already in `.gitignore`.
 
-> 💡 Generate strong secrets:
+> ⚠️ Use `JWT_SECRET` — not `JWT_ACCESS_SECRET`. Wrong variable name causes tokens to not persist across restarts.
+
+> 💡 Generate strong secrets (use this Node.js method to avoid truncation on Linux/Mac):
 > ```bash
-> node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+> node -e "
+> const crypto = require('crypto');
+> const s1 = crypto.randomBytes(64).toString('hex');
+> const s2 = crypto.randomBytes(64).toString('hex');
+> console.log('JWT_SECRET=' + s1);
+> console.log('JWT_REFRESH_SECRET=' + s2);
+> "
 > ```
 
 ### 4. Set up the database
@@ -102,6 +113,8 @@ AI_INTEGRATIONS_OPENAI_API_KEY=sk-your-openai-key-here
 ```bash
 # Create the database
 psql -U postgres -c "CREATE DATABASE inventopro;"
+# On Linux if that fails:
+sudo -u postgres psql -c "CREATE DATABASE inventopro;"
 
 # Set DATABASE_URL in your shell (Windows PowerShell)
 $env:DATABASE_URL="postgresql://postgres:yourpassword@localhost:5432/inventopro"
@@ -118,7 +131,7 @@ pnpm --filter @workspace/scripts run seed
 **Terminal 1 — API Server:**
 ```powershell
 $env:DATABASE_URL="postgresql://postgres:yourpassword@localhost:5432/inventopro"
-$env:JWT_ACCESS_SECRET="your-access-secret"
+$env:JWT_SECRET="your-secret"
 $env:JWT_REFRESH_SECRET="your-refresh-secret"
 $env:PORT="8080"
 pnpm --filter @workspace/api-server run dev
@@ -132,6 +145,34 @@ pnpm --filter @workspace/inventory-app run dev
 Open http://localhost:5173
 
 **Default login:** `admin@demo.com` / `Admin@123`
+
+---
+
+## Production Deployment
+
+**Live URL:** https://pms.icaweb.in  
+**Server:** Hostbet VPS — Ubuntu 24.04 LTS (203.174.22.119)  
+**App directory:** `/var/www/inventopro`
+
+### Redeploy after pushing changes
+
+```bash
+cd /var/www/inventopro
+git pull origin main
+pnpm install
+pnpm --filter @workspace/api-server run build
+pnpm --filter @workspace/inventory-app run build
+pm2 restart ecosystem.config.js
+```
+
+### Check production status
+
+```bash
+pm2 status
+pm2 logs inventopro-api --lines 20 --nostream
+```
+
+See `SOP-InventoPro.md` for full deployment documentation.
 
 ---
 
@@ -237,6 +278,11 @@ PUT    /business
 - `emitDeclarationOnly` — only `.d.ts` files are emitted; bundling is done by esbuild/vite/tsx
 - Every package extends `tsconfig.base.json` which sets `composite: true`
 
+### Environment Variables
+- The correct variable name is `JWT_SECRET` (not `JWT_ACCESS_SECRET`)
+- On production, secrets are managed via `ecosystem.config.js` — PM2 injects them before the app starts
+- `dotenv injecting env (0)` on production is **normal** — it means PM2 already injected all vars
+
 ### Database
 - Drizzle `numeric` fields are returned as **strings** — always wrap with `Number()` before using
 - Do NOT use `Response.parse()` on route responses — Zod `date()` won't accept ISO strings
@@ -244,7 +290,7 @@ PUT    /business
 - `DATABASE_URL` must be set as environment variable before running `pnpm --filter @workspace/db run push`
 
 ### Auth
-- JWT secrets use `crypto.randomBytes()` fallback if env vars not set — tokens won't persist across restarts
+- JWT access token secret env var is `JWT_SECRET` (not `JWT_ACCESS_SECRET`)
 - Auth token injection uses `setAuthTokenGetter` from `@workspace/api-client-react`
 
 ### Build
@@ -265,6 +311,7 @@ pnpm --filter @workspace/api-spec run codegen
 ### AI Insights
 - Uses OpenAI via env vars: `AI_INTEGRATIONS_OPENAI_BASE_URL`, `AI_INTEGRATIONS_OPENAI_API_KEY`
 - Cached for 5 minutes; use `?force=true` query param to bypass cache
+- If API key is not set, the AI insights endpoint will fail gracefully
 
 ---
 
@@ -283,6 +330,27 @@ This project was originally developed on Replit (Linux). The following changes w
 - Fixed `drizzle.config.ts` — replaced `path.join(__dirname, ...)` with relative path
 - Added `.gitattributes` to normalize line endings (LF) across Windows/Linux
 - `mockup-sandbox` excluded from typecheck — Replit-only canvas tool
+
+---
+
+## Planned Improvements
+
+### UI
+- [ ] Improved dashboard layout and visual design
+- [ ] Better mobile responsiveness
+- [ ] Dark mode support
+- [ ] Enhanced data tables with filtering and export
+
+### AI Features
+- [ ] Fix/improve AI dashboard insights
+- [ ] AI-powered low stock predictions
+- [ ] AI purchase order suggestions based on sales trends
+
+### Features
+- [ ] WhatsApp/email invoice sharing
+- [ ] Barcode scanning support
+- [ ] Automated database backups
+- [ ] Customer portal for invoice viewing
 
 ---
 
@@ -312,13 +380,3 @@ This project was originally developed on Replit (Linux). The following changes w
 | `lib/api-client-react` | `@workspace/api-client-react` | Generated React Query hooks |
 | `lib/integrations-openai-ai-server` | `@workspace/integrations-openai-ai-server` | OpenAI server helpers (batch, image, audio) |
 | `scripts` | `@workspace/scripts` | Utility scripts (seed, etc.) |
-
----
-
-## Next Steps
-
-- [ ] Create startup script to auto-load env vars (avoid manual `$env:` every session)
-- [ ] Deploy to VPS/cloud server
-- [ ] Configure Nginx reverse proxy
-- [ ] Set up PM2 for process management
-- [ ] Configure SSL certificate
