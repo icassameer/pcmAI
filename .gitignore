@@ -5,3 +5,4 @@ dist
 
 dist
 *.mjs.map
+ecosystem.config.js
