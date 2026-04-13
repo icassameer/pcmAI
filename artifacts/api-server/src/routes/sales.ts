@@ -18,7 +18,7 @@ import PDFDocument from "pdfkit";
 
 const router: IRouter = Router();
 
-router.get("/sales", authMiddleware, async (req, res): Promise<void> => {
+router.get("/sales", authMiddleware, async (req: AuthRequest, res): Promise<void> => {
   const params = ListSalesQueryParams.safeParse(req.query);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -27,8 +27,10 @@ router.get("/sales", authMiddleware, async (req, res): Promise<void> => {
 
   const { page = 1, limit = 20, customerId, startDate, endDate, status } = params.data;
   const offset = (page - 1) * limit;
+  const { tenantId } = req.user!;
 
   const conditions: any[] = [];
+  if (tenantId !== null) conditions.push(eq(salesTable.tenantId, tenantId));
   if (customerId) conditions.push(eq(salesTable.customerId, customerId));
   if (startDate) conditions.push(gte(salesTable.saleDate, new Date(startDate)));
   if (endDate) conditions.push(lte(salesTable.saleDate, new Date(endDate)));
@@ -68,10 +70,15 @@ router.post("/sales", authMiddleware, requireRole("super_admin", "admin", "store
   }
 
   const { saleDate, customerId, customerName, customerPhone, customerAddress, customerGstin, items, discount = 0, paidAmount = 0, isInterState = false } = parsed.data;
+  const { tenantId } = req.user!;
 
   try {
     const result = await db.transaction(async (tx) => {
-      const [business] = await tx.select().from(businessProfileTable).limit(1);
+      // Scope business profile to this tenant
+      const bpConditions: any[] = [];
+      if (tenantId !== null) bpConditions.push(eq(businessProfileTable.tenantId, tenantId));
+      const [business] = await tx.select().from(businessProfileTable).where(bpConditions.length > 0 ? and(...bpConditions) : undefined).limit(1);
+
       const invoiceNo = `${business?.invoicePrefix || "INV"}-${new Date().getFullYear()}-${String(business?.nextInvoiceNum || 1).padStart(4, "0")}`;
 
       if (business) {
@@ -83,7 +90,9 @@ router.post("/sales", authMiddleware, requireRole("super_admin", "admin", "store
       const processedItems: any[] = [];
 
       for (const item of items) {
-        const [product] = await tx.select().from(productsTable).where(eq(productsTable.id, item.productId)).limit(1);
+        const pConditions: any[] = [eq(productsTable.id, item.productId)];
+        if (tenantId !== null) pConditions.push(eq(productsTable.tenantId, tenantId));
+        const [product] = await tx.select().from(productsTable).where(and(...pConditions)).limit(1);
         if (!product) throw new Error(`Product with id ${item.productId} not found`);
         if (Number(product.currentStock) < item.quantity) throw new Error(`Insufficient stock for ${product.name}. Available: ${product.currentStock}`);
 
@@ -105,6 +114,7 @@ router.post("/sales", authMiddleware, requireRole("super_admin", "admin", "store
         totalTax += taxAmount;
 
         processedItems.push({
+          tenantId,
           productId: item.productId,
           quantity: String(item.quantity),
           unit: product.unit,
@@ -124,6 +134,7 @@ router.post("/sales", authMiddleware, requireRole("super_admin", "admin", "store
       const paymentStatus = balanceDue <= 0 ? "paid" : paidAmount > 0 ? "partial" : "pending";
 
       const [sale] = await tx.insert(salesTable).values({
+        tenantId,
         invoiceNo,
         saleDate: new Date(saleDate),
         customerId,
@@ -166,12 +177,12 @@ router.post("/sales", authMiddleware, requireRole("super_admin", "admin", "store
       customerPhone: sale.customerPhone,
       customerAddress: sale.customerAddress,
       customerGstin: sale.customerGstin,
-    subtotal: Number(sale.subtotal),
-    taxAmount: Number(sale.taxAmount),
-    discount: Number(sale.discount),
-    grandTotal: Number(sale.grandTotal),
-    paidAmount: Number(sale.paidAmount),
-    balanceDue: Number(sale.balanceDue),
+      subtotal: Number(sale.subtotal),
+      taxAmount: Number(sale.taxAmount),
+      discount: Number(sale.discount),
+      grandTotal: Number(sale.grandTotal),
+      paidAmount: Number(sale.paidAmount),
+      balanceDue: Number(sale.balanceDue),
       paymentStatus: sale.paymentStatus,
       createdAt: sale.createdAt.toISOString(),
     });
@@ -182,14 +193,18 @@ router.post("/sales", authMiddleware, requireRole("super_admin", "admin", "store
   }
 });
 
-router.get("/sales/:id", authMiddleware, async (req, res): Promise<void> => {
+router.get("/sales/:id", authMiddleware, async (req: AuthRequest, res): Promise<void> => {
   const params = GetSaleParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
 
-  const [sale] = await db.select().from(salesTable).where(eq(salesTable.id, params.data.id)).limit(1);
+  const { tenantId } = req.user!;
+  const conditions: any[] = [eq(salesTable.id, params.data.id)];
+  if (tenantId !== null) conditions.push(eq(salesTable.tenantId, tenantId));
+
+  const [sale] = await db.select().from(salesTable).where(and(...conditions)).limit(1);
   if (!sale) {
     res.status(404).json({ error: "Sale not found" });
     return;
@@ -239,14 +254,18 @@ router.get("/sales/:id", authMiddleware, async (req, res): Promise<void> => {
   });
 });
 
-router.get("/sales/:id/invoice-pdf", authMiddleware, async (req, res): Promise<void> => {
+router.get("/sales/:id/invoice-pdf", authMiddleware, async (req: AuthRequest, res): Promise<void> => {
   const params = GetSaleInvoicePdfParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
 
-  const [sale] = await db.select().from(salesTable).where(eq(salesTable.id, params.data.id)).limit(1);
+  const { tenantId } = req.user!;
+  const saleConditions: any[] = [eq(salesTable.id, params.data.id)];
+  if (tenantId !== null) saleConditions.push(eq(salesTable.tenantId, tenantId));
+
+  const [sale] = await db.select().from(salesTable).where(and(...saleConditions)).limit(1);
   if (!sale) {
     res.status(404).json({ error: "Sale not found" });
     return;
@@ -270,7 +289,9 @@ router.get("/sales/:id/invoice-pdf", authMiddleware, async (req, res): Promise<v
     .leftJoin(productsTable, eq(saleItemsTable.productId, productsTable.id))
     .where(eq(saleItemsTable.saleId, sale.id));
 
-  const [business] = await db.select().from(businessProfileTable).limit(1);
+  const bpConditions: any[] = [];
+  if (tenantId !== null) bpConditions.push(eq(businessProfileTable.tenantId, tenantId));
+  const [business] = await db.select().from(businessProfileTable).where(bpConditions.length > 0 ? and(...bpConditions) : undefined).limit(1);
 
   const doc = new PDFDocument({ margin: 50 });
   res.setHeader("Content-Type", "application/pdf");
@@ -370,10 +391,14 @@ router.patch("/sales/:id", authMiddleware, requireRole("super_admin", "admin"), 
     return;
   }
 
+  const { tenantId } = req.user!;
+  const conditions: any[] = [eq(salesTable.id, params.data.id)];
+  if (tenantId !== null) conditions.push(eq(salesTable.tenantId, tenantId));
+
   const updateData: any = {};
   if (parsed.data.paidAmount !== undefined) {
     updateData.paidAmount = String(parsed.data.paidAmount);
-    const [existing] = await db.select().from(salesTable).where(eq(salesTable.id, params.data.id)).limit(1);
+    const [existing] = await db.select().from(salesTable).where(and(...conditions)).limit(1);
     if (existing) {
       const balance = Number(existing.grandTotal) - parsed.data.paidAmount;
       updateData.balanceDue = String(Math.max(0, balance));
@@ -382,7 +407,7 @@ router.patch("/sales/:id", authMiddleware, requireRole("super_admin", "admin"), 
   }
   if (parsed.data.paymentStatus !== undefined) updateData.paymentStatus = parsed.data.paymentStatus;
 
-  const [sale] = await db.update(salesTable).set(updateData).where(eq(salesTable.id, params.data.id)).returning();
+  const [sale] = await db.update(salesTable).set(updateData).where(and(...conditions)).returning();
   if (!sale) {
     res.status(404).json({ error: "Sale not found" });
     return;
@@ -408,7 +433,11 @@ router.delete("/sales/:id", authMiddleware, requireRole("super_admin", "admin"),
     return;
   }
 
-  const [sale] = await db.delete(salesTable).where(eq(salesTable.id, params.data.id)).returning();
+  const { tenantId } = req.user!;
+  const conditions: any[] = [eq(salesTable.id, params.data.id)];
+  if (tenantId !== null) conditions.push(eq(salesTable.tenantId, tenantId));
+
+  const [sale] = await db.delete(salesTable).where(and(...conditions)).returning();
   if (!sale) {
     res.status(404).json({ error: "Sale not found" });
     return;

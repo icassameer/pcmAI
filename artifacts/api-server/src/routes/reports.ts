@@ -11,11 +11,11 @@ import {
   GetGstSummaryReportQueryParams,
   GetGstSummaryReportResponse,
 } from "@workspace/api-zod";
-import { authMiddleware } from "../lib/auth";
+import { authMiddleware, type AuthRequest } from "../lib/auth";
 
 const router: IRouter = Router();
 
-router.get("/reports/sales-summary", authMiddleware, async (req, res): Promise<void> => {
+router.get("/reports/sales-summary", authMiddleware, async (req: AuthRequest, res): Promise<void> => {
   const params = GetSalesSummaryReportQueryParams.safeParse(req.query);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -23,8 +23,10 @@ router.get("/reports/sales-summary", authMiddleware, async (req, res): Promise<v
   }
 
   const { period = "monthly", startDate, endDate } = params.data;
+  const { tenantId } = req.user!;
 
   const conditions: any[] = [];
+  if (tenantId !== null) conditions.push(eq(salesTable.tenantId, tenantId));
   if (startDate) conditions.push(gte(salesTable.saleDate, new Date(startDate)));
   if (endDate) conditions.push(lte(salesTable.saleDate, new Date(endDate)));
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -45,6 +47,9 @@ router.get("/reports/sales-summary", authMiddleware, async (req, res): Promise<v
     default: dateFormat = "YYYY-MM"; break;
   }
 
+  // Build tenant condition for raw SQL
+  const tenantSql = tenantId !== null ? sql`AND tenant_id = ${tenantId}` : sql``;
+
   const breakdownQuery = await db.execute(sql`
     SELECT
       to_char(sale_date, ${dateFormat}) as period,
@@ -52,7 +57,9 @@ router.get("/reports/sales-summary", authMiddleware, async (req, res): Promise<v
       COALESCE(SUM(tax_amount::numeric), 0) as tax,
       count(*)::int as count
     FROM sales
-    ${startDate ? sql`WHERE sale_date >= ${new Date(startDate)}` : sql``}
+    WHERE TRUE
+    ${tenantSql}
+    ${startDate ? sql`AND sale_date >= ${new Date(startDate)}` : sql``}
     ${endDate ? sql`AND sale_date <= ${new Date(endDate)}` : sql``}
     GROUP BY to_char(sale_date, ${dateFormat})
     ORDER BY period DESC
@@ -73,7 +80,7 @@ router.get("/reports/sales-summary", authMiddleware, async (req, res): Promise<v
   });
 });
 
-router.get("/reports/purchase-summary", authMiddleware, async (req, res): Promise<void> => {
+router.get("/reports/purchase-summary", authMiddleware, async (req: AuthRequest, res): Promise<void> => {
   const params = GetPurchaseSummaryReportQueryParams.safeParse(req.query);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -81,8 +88,10 @@ router.get("/reports/purchase-summary", authMiddleware, async (req, res): Promis
   }
 
   const { startDate, endDate } = params.data;
+  const { tenantId } = req.user!;
 
   const conditions: any[] = [];
+  if (tenantId !== null) conditions.push(eq(purchasesTable.tenantId, tenantId));
   if (startDate) conditions.push(gte(purchasesTable.invoiceDate, new Date(startDate)));
   if (endDate) conditions.push(lte(purchasesTable.invoiceDate, new Date(endDate)));
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
@@ -106,7 +115,7 @@ router.get("/reports/purchase-summary", authMiddleware, async (req, res): Promis
   });
 });
 
-router.get("/reports/inventory", authMiddleware, async (req, res): Promise<void> => {
+router.get("/reports/inventory", authMiddleware, async (req: AuthRequest, res): Promise<void> => {
   const params = GetInventoryReportQueryParams.safeParse(req.query);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -114,8 +123,10 @@ router.get("/reports/inventory", authMiddleware, async (req, res): Promise<void>
   }
 
   const { type = "current", categoryId } = params.data;
+  const { tenantId } = req.user!;
 
   const conditions: any[] = [eq(productsTable.active, true)];
+  if (tenantId !== null) conditions.push(eq(productsTable.tenantId, tenantId));
   if (categoryId) conditions.push(eq(productsTable.categoryId, categoryId));
 
   if (type === "low-stock") {
@@ -173,7 +184,7 @@ router.get("/reports/inventory", authMiddleware, async (req, res): Promise<void>
   });
 });
 
-router.get("/reports/gst-summary", authMiddleware, async (req, res): Promise<void> => {
+router.get("/reports/gst-summary", authMiddleware, async (req: AuthRequest, res): Promise<void> => {
   const params = GetGstSummaryReportQueryParams.safeParse(req.query);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -183,6 +194,10 @@ router.get("/reports/gst-summary", authMiddleware, async (req, res): Promise<voi
   const { month, year } = params.data;
   const startDate = new Date(year, month - 1, 1);
   const endDate = new Date(year, month, 0, 23, 59, 59);
+  const { tenantId } = req.user!;
+
+  const tenantSql = tenantId !== null ? sql`AND s.tenant_id = ${tenantId}` : sql``;
+  const tenantPurchaseSql = tenantId !== null ? sql`AND p.tenant_id = ${tenantId}` : sql``;
 
   const salesBreakdown = await db.execute(sql`
     SELECT
@@ -195,6 +210,7 @@ router.get("/reports/gst-summary", authMiddleware, async (req, res): Promise<voi
     FROM sale_items si
     JOIN sales s ON s.id = si.sale_id
     WHERE s.sale_date >= ${startDate} AND s.sale_date <= ${endDate}
+    ${tenantSql}
     GROUP BY si.gst_rate
     ORDER BY si.gst_rate
   `);
@@ -210,6 +226,7 @@ router.get("/reports/gst-summary", authMiddleware, async (req, res): Promise<voi
     FROM purchase_items pi
     JOIN purchases p ON p.id = pi.purchase_id
     WHERE p.invoice_date >= ${startDate} AND p.invoice_date <= ${endDate}
+    ${tenantPurchaseSql}
     GROUP BY pi.gst_rate
     ORDER BY pi.gst_rate
   `);

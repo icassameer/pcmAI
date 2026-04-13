@@ -1,9 +1,11 @@
-import { pgTable, serial, text, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, integer, timestamp, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+import { tenantsTable } from "./tenants";
 
 export const businessProfileTable = pgTable("business_profile", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
   name: text("name").notNull().default("My Business"),
   address: text("address"),
   gstin: text("gstin"),
@@ -17,7 +19,9 @@ export const businessProfileTable = pgTable("business_profile", {
   nextInvoiceNum: integer("next_invoice_num").notNull().default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (table) => [
+  index("business_profile_tenant_idx").on(table.tenantId),
+]);
 
 export const insertBusinessProfileSchema = createInsertSchema(businessProfileTable).omit({ id: true, createdAt: true, updatedAt: true });
 export type InsertBusinessProfile = z.infer<typeof insertBusinessProfileSchema>;

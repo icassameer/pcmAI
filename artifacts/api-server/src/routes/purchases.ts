@@ -16,7 +16,7 @@ import { authMiddleware, requireRole, type AuthRequest } from "../lib/auth";
 
 const router: IRouter = Router();
 
-router.get("/purchases", authMiddleware, async (req, res): Promise<void> => {
+router.get("/purchases", authMiddleware, async (req: AuthRequest, res): Promise<void> => {
   const params = ListPurchasesQueryParams.safeParse(req.query);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -25,8 +25,10 @@ router.get("/purchases", authMiddleware, async (req, res): Promise<void> => {
 
   const { page = 1, limit = 20, supplierId, startDate, endDate, status } = params.data;
   const offset = (page - 1) * limit;
+  const { tenantId } = req.user!;
 
   const conditions: any[] = [];
+  if (tenantId !== null) conditions.push(eq(purchasesTable.tenantId, tenantId));
   if (supplierId) conditions.push(eq(purchasesTable.supplierId, supplierId));
   if (startDate) conditions.push(gte(purchasesTable.invoiceDate, new Date(startDate)));
   if (endDate) conditions.push(lte(purchasesTable.invoiceDate, new Date(endDate)));
@@ -88,6 +90,7 @@ router.post("/purchases", authMiddleware, requireRole("super_admin", "admin", "s
   }
 
   const { invoiceNo, invoiceDate, supplierId, items, discount = 0, paidAmount = 0, isInterState = false } = parsed.data;
+  const { tenantId } = req.user!;
 
   try {
     const result = await db.transaction(async (tx) => {
@@ -96,7 +99,9 @@ router.post("/purchases", authMiddleware, requireRole("super_admin", "admin", "s
       const processedItems: any[] = [];
 
       for (const item of items) {
-        const [product] = await tx.select().from(productsTable).where(eq(productsTable.id, item.productId)).limit(1);
+        const conditions: any[] = [eq(productsTable.id, item.productId)];
+        if (tenantId !== null) conditions.push(eq(productsTable.tenantId, tenantId));
+        const [product] = await tx.select().from(productsTable).where(and(...conditions)).limit(1);
         if (!product) throw new Error(`Product with id ${item.productId} not found`);
 
         const lineTotal = item.quantity * item.unitPrice;
@@ -117,6 +122,7 @@ router.post("/purchases", authMiddleware, requireRole("super_admin", "admin", "s
         totalTax += taxAmount;
 
         processedItems.push({
+          tenantId,
           productId: item.productId,
           quantity: String(item.quantity),
           unit: product.unit,
@@ -135,6 +141,7 @@ router.post("/purchases", authMiddleware, requireRole("super_admin", "admin", "s
       const paymentStatus = balanceDue <= 0 ? "paid" : paidAmount > 0 ? "partial" : "pending";
 
       const [purchase] = await tx.insert(purchasesTable).values({
+        tenantId,
         invoiceNo,
         invoiceDate: new Date(invoiceDate),
         supplierId,
@@ -186,12 +193,16 @@ router.post("/purchases", authMiddleware, requireRole("super_admin", "admin", "s
   }
 });
 
-router.get("/purchases/:id", authMiddleware, async (req, res): Promise<void> => {
+router.get("/purchases/:id", authMiddleware, async (req: AuthRequest, res): Promise<void> => {
   const params = GetPurchaseParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
+
+  const { tenantId } = req.user!;
+  const conditions: any[] = [eq(purchasesTable.id, params.data.id)];
+  if (tenantId !== null) conditions.push(eq(purchasesTable.tenantId, tenantId));
 
   const [purchase] = await db
     .select({
@@ -211,7 +222,7 @@ router.get("/purchases/:id", authMiddleware, async (req, res): Promise<void> => 
     })
     .from(purchasesTable)
     .leftJoin(suppliersTable, eq(purchasesTable.supplierId, suppliersTable.id))
-    .where(eq(purchasesTable.id, params.data.id))
+    .where(and(...conditions))
     .limit(1);
 
   if (!purchase) {
@@ -276,10 +287,14 @@ router.patch("/purchases/:id", authMiddleware, requireRole("super_admin", "admin
     return;
   }
 
+  const { tenantId } = req.user!;
+  const conditions: any[] = [eq(purchasesTable.id, params.data.id)];
+  if (tenantId !== null) conditions.push(eq(purchasesTable.tenantId, tenantId));
+
   const updateData: any = {};
   if (parsed.data.paidAmount !== undefined) {
     updateData.paidAmount = String(parsed.data.paidAmount);
-    const [existing] = await db.select().from(purchasesTable).where(eq(purchasesTable.id, params.data.id)).limit(1);
+    const [existing] = await db.select().from(purchasesTable).where(and(...conditions)).limit(1);
     if (existing) {
       const balance = Number(existing.grandTotal) - parsed.data.paidAmount;
       updateData.balanceDue = String(Math.max(0, balance));
@@ -288,7 +303,7 @@ router.patch("/purchases/:id", authMiddleware, requireRole("super_admin", "admin
   }
   if (parsed.data.paymentStatus !== undefined) updateData.paymentStatus = parsed.data.paymentStatus;
 
-  const [purchase] = await db.update(purchasesTable).set(updateData).where(eq(purchasesTable.id, params.data.id)).returning();
+  const [purchase] = await db.update(purchasesTable).set(updateData).where(and(...conditions)).returning();
   if (!purchase) {
     res.status(404).json({ error: "Purchase not found" });
     return;
@@ -320,7 +335,11 @@ router.delete("/purchases/:id", authMiddleware, requireRole("super_admin", "admi
     return;
   }
 
-  const [purchase] = await db.delete(purchasesTable).where(eq(purchasesTable.id, params.data.id)).returning();
+  const { tenantId } = req.user!;
+  const conditions: any[] = [eq(purchasesTable.id, params.data.id)];
+  if (tenantId !== null) conditions.push(eq(purchasesTable.tenantId, tenantId));
+
+  const [purchase] = await db.delete(purchasesTable).where(and(...conditions)).returning();
   if (!purchase) {
     res.status(404).json({ error: "Purchase not found" });
     return;

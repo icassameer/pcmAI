@@ -16,7 +16,7 @@ import { authMiddleware, requireRole, type AuthRequest } from "../lib/auth";
 
 const router: IRouter = Router();
 
-router.get("/customers", authMiddleware, async (req, res): Promise<void> => {
+router.get("/customers", authMiddleware, async (req: AuthRequest, res): Promise<void> => {
   const params = ListCustomersQueryParams.safeParse(req.query);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -25,8 +25,10 @@ router.get("/customers", authMiddleware, async (req, res): Promise<void> => {
 
   const { page = 1, limit = 20, search } = params.data;
   const offset = (page - 1) * limit;
+  const { tenantId } = req.user!;
 
   const conditions: any[] = [];
+  if (tenantId !== null) conditions.push(eq(customersTable.tenantId, tenantId));
   if (search) {
     conditions.push(
       sql`(${customersTable.name} ILIKE ${'%' + search + '%'} OR ${customersTable.phone} ILIKE ${'%' + search + '%'} OR ${customersTable.gstin} ILIKE ${'%' + search + '%'})`
@@ -56,18 +58,23 @@ router.post("/customers", authMiddleware, requireRole("super_admin", "admin"), a
     return;
   }
 
-  const [customer] = await db.insert(customersTable).values(parsed.data).returning();
+  const { tenantId } = req.user!;
+  const [customer] = await db.insert(customersTable).values({ ...parsed.data, tenantId }).returning();
   res.status(201).json({ ...customer, createdAt: customer.createdAt.toISOString() });
 });
 
-router.get("/customers/:id", authMiddleware, async (req, res): Promise<void> => {
+router.get("/customers/:id", authMiddleware, async (req: AuthRequest, res): Promise<void> => {
   const params = GetCustomerParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
 
-  const [customer] = await db.select().from(customersTable).where(eq(customersTable.id, params.data.id)).limit(1);
+  const { tenantId } = req.user!;
+  const conditions: any[] = [eq(customersTable.id, params.data.id)];
+  if (tenantId !== null) conditions.push(eq(customersTable.tenantId, tenantId));
+
+  const [customer] = await db.select().from(customersTable).where(and(...conditions)).limit(1);
   if (!customer) {
     res.status(404).json({ error: "Customer not found" });
     return;
@@ -89,7 +96,11 @@ router.patch("/customers/:id", authMiddleware, requireRole("super_admin", "admin
     return;
   }
 
-  const [customer] = await db.update(customersTable).set(parsed.data).where(eq(customersTable.id, params.data.id)).returning();
+  const { tenantId } = req.user!;
+  const conditions: any[] = [eq(customersTable.id, params.data.id)];
+  if (tenantId !== null) conditions.push(eq(customersTable.tenantId, tenantId));
+
+  const [customer] = await db.update(customersTable).set(parsed.data).where(and(...conditions)).returning();
   if (!customer) {
     res.status(404).json({ error: "Customer not found" });
     return;
@@ -105,7 +116,11 @@ router.delete("/customers/:id", authMiddleware, requireRole("super_admin", "admi
     return;
   }
 
-  const [customer] = await db.delete(customersTable).where(eq(customersTable.id, params.data.id)).returning();
+  const { tenantId } = req.user!;
+  const conditions: any[] = [eq(customersTable.id, params.data.id)];
+  if (tenantId !== null) conditions.push(eq(customersTable.tenantId, tenantId));
+
+  const [customer] = await db.delete(customersTable).where(and(...conditions)).returning();
   if (!customer) {
     res.status(404).json({ error: "Customer not found" });
     return;

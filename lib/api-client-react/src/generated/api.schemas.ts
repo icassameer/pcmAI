@@ -39,6 +39,7 @@ export interface User {
   role: UserRole;
   active: boolean;
   createdAt: string;
+  tenantId?: number | null;
 }
 
 export interface LoginResponse {

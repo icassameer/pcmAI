@@ -26,7 +26,8 @@
     "openai": "^6.27.0",
     "pdfkit": "^0.18.0",
     "pino": "^9",
-    "pino-http": "^10"
+    "pino-http": "^10",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/archiver": "^7.0.0",

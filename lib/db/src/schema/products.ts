@@ -3,9 +3,11 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { categoriesTable } from "./categories";
 import { suppliersTable } from "./suppliers";
+import { tenantsTable } from "./tenants";
 
 export const productsTable = pgTable("products", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
   name: text("name").notNull(),
   categoryId: integer("category_id").references(() => categoriesTable.id),
   brand: text("brand"),
@@ -25,6 +27,7 @@ export const productsTable = pgTable("products", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [
+  index("products_tenant_idx").on(table.tenantId),
   index("products_name_idx").on(table.name),
   index("products_sku_idx").on(table.sku),
   index("products_category_idx").on(table.categoryId),

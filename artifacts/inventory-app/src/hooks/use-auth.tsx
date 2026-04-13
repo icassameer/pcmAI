@@ -54,7 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const checkRole = useCallback((roles: User["role"][]) => {
     if (!user) return false;
-    if (user.role === "super_admin") return true;
+    if (user.role === "super_admin" || user.role === ("platform_admin" as any)) return true;
     return roles.includes(user.role);
   }, [user]);
 

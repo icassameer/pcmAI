@@ -3,9 +3,11 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { suppliersTable } from "./suppliers";
 import { productsTable } from "./products";
+import { tenantsTable } from "./tenants";
 
 export const purchasesTable = pgTable("purchases", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
   invoiceNo: text("invoice_no").notNull(),
   invoiceDate: timestamp("invoice_date", { withTimezone: true }).notNull(),
   supplierId: integer("supplier_id").notNull().references(() => suppliersTable.id),
@@ -21,12 +23,14 @@ export const purchasesTable = pgTable("purchases", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (table) => [
+  index("purchases_tenant_idx").on(table.tenantId),
   index("purchases_date_idx").on(table.invoiceDate),
   index("purchases_supplier_idx").on(table.supplierId),
 ]);
 
 export const purchaseItemsTable = pgTable("purchase_items", {
   id: serial("id").primaryKey(),
+  tenantId: integer("tenant_id").references(() => tenantsTable.id),
   purchaseId: integer("purchase_id").notNull().references(() => purchasesTable.id, { onDelete: "cascade" }),
   productId: integer("product_id").notNull().references(() => productsTable.id),
   quantity: numeric("quantity", { precision: 12, scale: 2 }).notNull(),

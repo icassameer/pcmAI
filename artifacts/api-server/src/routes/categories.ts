@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq, sql } from "drizzle-orm";
+import { eq, sql, and } from "drizzle-orm";
 import { db, categoriesTable, productsTable } from "@workspace/db";
 import {
   ListCategoriesResponse,
@@ -13,7 +13,12 @@ import { authMiddleware, requireRole, type AuthRequest } from "../lib/auth";
 
 const router: IRouter = Router();
 
-router.get("/categories", authMiddleware, async (_req, res): Promise<void> => {
+router.get("/categories", authMiddleware, async (req: AuthRequest, res): Promise<void> => {
+  const { tenantId } = req.user!;
+  const conditions: any[] = [];
+  if (tenantId !== null) conditions.push(eq(categoriesTable.tenantId, tenantId));
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
   const categories = await db
     .select({
       id: categoriesTable.id,
@@ -23,6 +28,7 @@ router.get("/categories", authMiddleware, async (_req, res): Promise<void> => {
       productCount: sql<number>`COALESCE((SELECT count(*)::int FROM products WHERE products.category_id = ${categoriesTable.id}), 0)`,
     })
     .from(categoriesTable)
+    .where(whereClause)
     .orderBy(categoriesTable.name);
 
   res.json(
@@ -37,7 +43,10 @@ router.post("/categories", authMiddleware, requireRole("super_admin", "admin"), 
     return;
   }
 
+  const { tenantId } = req.user!;
+
   const [category] = await db.insert(categoriesTable).values({
+    tenantId,
     name: parsed.data.name,
     description: parsed.data.description,
   }).returning();
@@ -64,10 +73,14 @@ router.patch("/categories/:id", authMiddleware, requireRole("super_admin", "admi
     return;
   }
 
+  const { tenantId } = req.user!;
+  const conditions: any[] = [eq(categoriesTable.id, params.data.id)];
+  if (tenantId !== null) conditions.push(eq(categoriesTable.tenantId, tenantId));
+
   const [category] = await db.update(categoriesTable).set({
     name: parsed.data.name,
     description: parsed.data.description,
-  }).where(eq(categoriesTable.id, params.data.id)).returning();
+  }).where(and(...conditions)).returning();
 
   if (!category) {
     res.status(404).json({ error: "Category not found" });
@@ -92,7 +105,11 @@ router.delete("/categories/:id", authMiddleware, requireRole("super_admin", "adm
     return;
   }
 
-  const [category] = await db.delete(categoriesTable).where(eq(categoriesTable.id, params.data.id)).returning();
+  const { tenantId } = req.user!;
+  const conditions: any[] = [eq(categoriesTable.id, params.data.id)];
+  if (tenantId !== null) conditions.push(eq(categoriesTable.tenantId, tenantId));
+
+  const [category] = await db.delete(categoriesTable).where(and(...conditions)).returning();
   if (!category) {
     res.status(404).json({ error: "Category not found" });
     return;

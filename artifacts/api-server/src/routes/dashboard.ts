@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { sql, desc, gte, eq } from "drizzle-orm";
+import { sql, desc, gte, eq, and } from "drizzle-orm";
 import { db, salesTable, purchasesTable, productsTable, customersTable, suppliersTable, saleItemsTable, categoriesTable } from "@workspace/db";
 import {
   GetDashboardStatsResponse,
@@ -25,7 +25,8 @@ function getOpenAI(): OpenAI | null {
   return null;
 }
 
-const aiInsightsCache: { data: any; timestamp: number } = { data: null, timestamp: 0 };
+// Per-tenant AI insights cache
+const aiInsightsCache = new Map<string, { data: any; timestamp: number }>();
 const AI_CACHE_TTL = 5 * 60 * 1000;
 
 function getDefaultInsights() {
@@ -39,63 +40,82 @@ function getDefaultInsights() {
 
 const router: IRouter = Router();
 
-router.get("/dashboard/stats", authMiddleware, async (_req, res): Promise<void> => {
+router.get("/dashboard/stats", authMiddleware, async (req: AuthRequest, _res): Promise<void> => {
+  const res = _res;
+  const { tenantId } = req.user!;
+  const tFilter = (table: any) => tenantId !== null ? eq(table.tenantId, tenantId) : undefined;
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
   const prevMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
 
+  const salesTenantCond = tenantId !== null ? eq(salesTable.tenantId, tenantId) : undefined;
+  const purchTenantCond = tenantId !== null ? eq(purchasesTable.tenantId, tenantId) : undefined;
+  const prodTenantCond = tenantId !== null ? eq(productsTable.tenantId, tenantId) : undefined;
+  const custTenantCond = tenantId !== null ? eq(customersTable.tenantId, tenantId) : undefined;
+  const suppTenantCond = tenantId !== null ? eq(suppliersTable.tenantId, tenantId) : undefined;
+
   const [todaySalesResult] = await db.select({
     total: sql<number>`COALESCE(SUM(grand_total::numeric), 0)`
-  }).from(salesTable).where(gte(salesTable.saleDate, today));
+  }).from(salesTable).where(and(gte(salesTable.saleDate, today), salesTenantCond));
 
   const [todayPurchasesResult] = await db.select({
     total: sql<number>`COALESCE(SUM(grand_total::numeric), 0)`
-  }).from(purchasesTable).where(gte(purchasesTable.invoiceDate, today));
+  }).from(purchasesTable).where(and(gte(purchasesTable.invoiceDate, today), purchTenantCond));
 
   const [lowStockResult] = await db.select({
     count: sql<number>`count(*)::int`
-  }).from(productsTable).where(sql`${productsTable.currentStock}::numeric <= ${productsTable.minStockAlert}::numeric AND ${productsTable.active} = true`);
+  }).from(productsTable).where(and(
+    sql`${productsTable.currentStock}::numeric <= ${productsTable.minStockAlert}::numeric AND ${productsTable.active} = true`,
+    prodTenantCond
+  ));
 
   const [pendingPaymentsResult] = await db.select({
     total: sql<number>`COALESCE(SUM(balance_due::numeric), 0)`
-  }).from(salesTable).where(sql`${salesTable.paymentStatus} != 'paid'`);
+  }).from(salesTable).where(and(sql`${salesTable.paymentStatus} != 'paid'`, salesTenantCond));
 
   const [totalProductsResult] = await db.select({
     count: sql<number>`count(*)::int`
-  }).from(productsTable);
+  }).from(productsTable).where(prodTenantCond);
 
   const [totalCustomersResult] = await db.select({
     count: sql<number>`count(*)::int`
-  }).from(customersTable);
+  }).from(customersTable).where(custTenantCond);
 
   const [totalSuppliersResult] = await db.select({
     count: sql<number>`count(*)::int`
-  }).from(suppliersTable);
+  }).from(suppliersTable).where(suppTenantCond);
 
   const [monthlyRevenueResult] = await db.select({
     total: sql<number>`COALESCE(SUM(grand_total::numeric), 0)`
-  }).from(salesTable).where(gte(salesTable.saleDate, monthStart));
+  }).from(salesTable).where(and(gte(salesTable.saleDate, monthStart), salesTenantCond));
 
   const [prevMonthRevenueResult] = await db.select({
     total: sql<number>`COALESCE(SUM(grand_total::numeric), 0)`
-  }).from(salesTable).where(sql`${salesTable.saleDate} >= ${prevMonthStart} AND ${salesTable.saleDate} < ${monthStart}`);
+  }).from(salesTable).where(and(
+    sql`${salesTable.saleDate} >= ${prevMonthStart} AND ${salesTable.saleDate} < ${monthStart}`,
+    salesTenantCond
+  ));
 
   const [monthlyPurchasesResult] = await db.select({
     total: sql<number>`COALESCE(SUM(grand_total::numeric), 0)`
-  }).from(purchasesTable).where(gte(purchasesTable.invoiceDate, monthStart));
+  }).from(purchasesTable).where(and(gte(purchasesTable.invoiceDate, monthStart), purchTenantCond));
 
   const [totalSalesCountResult] = await db.select({
     count: sql<number>`count(*)::int`
-  }).from(salesTable).where(gte(salesTable.saleDate, monthStart));
+  }).from(salesTable).where(and(gte(salesTable.saleDate, monthStart), salesTenantCond));
 
   const [stockValuationResult] = await db.select({
     total: sql<number>`COALESCE(SUM(current_stock::numeric * purchase_price::numeric), 0)`
-  }).from(productsTable).where(sql`${productsTable.active} = true`);
+  }).from(productsTable).where(and(sql`${productsTable.active} = true`, prodTenantCond));
 
   const [outOfStockResult] = await db.select({
     count: sql<number>`count(*)::int`
-  }).from(productsTable).where(sql`${productsTable.currentStock}::numeric <= 0 AND ${productsTable.active} = true`);
+  }).from(productsTable).where(and(
+    sql`${productsTable.currentStock}::numeric <= 0 AND ${productsTable.active} = true`,
+    prodTenantCond
+  ));
 
   const monthlyRevenue = Number(monthlyRevenueResult.total);
   const prevMonthRevenue = Number(prevMonthRevenueResult.total);
@@ -121,9 +141,13 @@ router.get("/dashboard/stats", authMiddleware, async (_req, res): Promise<void> 
   });
 });
 
-router.get("/dashboard/sales-trend", authMiddleware, async (_req, res): Promise<void> => {
+router.get("/dashboard/sales-trend", authMiddleware, async (req: AuthRequest, res): Promise<void> => {
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const { tenantId } = req.user!;
+
+  const salesTenantSql = tenantId !== null ? sql` AND tenant_id = ${tenantId}` : sql``;
+  const purchTenantSql = tenantId !== null ? sql` AND tenant_id = ${tenantId}` : sql``;
 
   const salesTrend = await db.execute(sql`
     WITH dates AS (
@@ -135,8 +159,8 @@ router.get("/dashboard/sales-trend", authMiddleware, async (_req, res): Promise<
     )
     SELECT
       d.date::text,
-      COALESCE((SELECT SUM(grand_total::numeric) FROM sales WHERE sale_date::date = d.date), 0) as sales,
-      COALESCE((SELECT SUM(grand_total::numeric) FROM purchases WHERE invoice_date::date = d.date), 0) as purchases
+      COALESCE((SELECT SUM(grand_total::numeric) FROM sales WHERE sale_date::date = d.date${salesTenantSql}), 0) as sales,
+      COALESCE((SELECT SUM(grand_total::numeric) FROM purchases WHERE invoice_date::date = d.date${purchTenantSql}), 0) as purchases
     FROM dates d
     ORDER BY d.date
   `);
@@ -150,7 +174,10 @@ router.get("/dashboard/sales-trend", authMiddleware, async (_req, res): Promise<
   );
 });
 
-router.get("/dashboard/top-products", authMiddleware, async (_req, res): Promise<void> => {
+router.get("/dashboard/top-products", authMiddleware, async (req: AuthRequest, res): Promise<void> => {
+  const { tenantId } = req.user!;
+  const tenantSql = tenantId !== null ? sql`WHERE p.tenant_id = ${tenantId}` : sql``;
+
   const topProducts = await db.execute(sql`
     SELECT
       p.id,
@@ -159,6 +186,7 @@ router.get("/dashboard/top-products", authMiddleware, async (_req, res): Promise
       COALESCE(SUM(si.total::numeric), 0) as total_revenue
     FROM products p
     LEFT JOIN sale_items si ON si.product_id = p.id
+    ${tenantSql}
     GROUP BY p.id, p.name
     HAVING COALESCE(SUM(si.quantity::numeric), 0) > 0
     ORDER BY total_revenue DESC
@@ -175,14 +203,18 @@ router.get("/dashboard/top-products", authMiddleware, async (_req, res): Promise
   );
 });
 
-router.get("/dashboard/recent-transactions", authMiddleware, async (_req, res): Promise<void> => {
+router.get("/dashboard/recent-transactions", authMiddleware, async (req: AuthRequest, res): Promise<void> => {
+  const { tenantId } = req.user!;
+  const salesTenantCond = tenantId !== null ? eq(salesTable.tenantId, tenantId) : undefined;
+  const purchTenantCond = tenantId !== null ? eq(purchasesTable.tenantId, tenantId) : undefined;
+
   const recentSales = await db.select({
     id: salesTable.id,
     invoiceNo: salesTable.invoiceNo,
     partyName: salesTable.customerName,
     amount: salesTable.grandTotal,
     date: salesTable.saleDate,
-  }).from(salesTable).orderBy(desc(salesTable.createdAt)).limit(5);
+  }).from(salesTable).where(salesTenantCond).orderBy(desc(salesTable.createdAt)).limit(5);
 
   const recentPurchases = await db
     .select({
@@ -194,6 +226,7 @@ router.get("/dashboard/recent-transactions", authMiddleware, async (_req, res): 
     })
     .from(purchasesTable)
     .leftJoin(suppliersTable, sql`${purchasesTable.supplierId} = ${suppliersTable.id}`)
+    .where(purchTenantCond)
     .orderBy(desc(purchasesTable.createdAt))
     .limit(5);
 
@@ -219,7 +252,10 @@ router.get("/dashboard/recent-transactions", authMiddleware, async (_req, res): 
   res.json(transactions);
 });
 
-router.get("/dashboard/category-sales", authMiddleware, async (_req, res): Promise<void> => {
+router.get("/dashboard/category-sales", authMiddleware, async (req: AuthRequest, res): Promise<void> => {
+  const { tenantId } = req.user!;
+  const tenantSql = tenantId !== null ? sql`WHERE c.tenant_id = ${tenantId}` : sql``;
+
   const categorySales = await db.execute(sql`
     SELECT
       c.name as category,
@@ -228,6 +264,7 @@ router.get("/dashboard/category-sales", authMiddleware, async (_req, res): Promi
     FROM categories c
     LEFT JOIN products p ON p.category_id = c.id
     LEFT JOIN sale_items si ON si.product_id = p.id
+    ${tenantSql}
     GROUP BY c.id, c.name
     ORDER BY revenue DESC
   `);
@@ -241,13 +278,25 @@ router.get("/dashboard/category-sales", authMiddleware, async (_req, res): Promi
   );
 });
 
-router.get("/dashboard/inventory-health", authMiddleware, async (_req, res): Promise<void> => {
+router.get("/dashboard/inventory-health", authMiddleware, async (req: AuthRequest, res): Promise<void> => {
+  const { tenantId } = req.user!;
+  const tenantCond = tenantId !== null ? eq(productsTable.tenantId, tenantId) : undefined;
+
   const [healthy] = await db.select({ count: sql<number>`count(*)::int` }).from(productsTable)
-    .where(sql`${productsTable.currentStock}::numeric > ${productsTable.minStockAlert}::numeric AND ${productsTable.active} = true`);
+    .where(and(
+      sql`${productsTable.currentStock}::numeric > ${productsTable.minStockAlert}::numeric AND ${productsTable.active} = true`,
+      tenantCond
+    ));
   const [lowStock] = await db.select({ count: sql<number>`count(*)::int` }).from(productsTable)
-    .where(sql`${productsTable.currentStock}::numeric > 0 AND ${productsTable.currentStock}::numeric <= ${productsTable.minStockAlert}::numeric AND ${productsTable.active} = true`);
+    .where(and(
+      sql`${productsTable.currentStock}::numeric > 0 AND ${productsTable.currentStock}::numeric <= ${productsTable.minStockAlert}::numeric AND ${productsTable.active} = true`,
+      tenantCond
+    ));
   const [outOfStock] = await db.select({ count: sql<number>`count(*)::int` }).from(productsTable)
-    .where(sql`${productsTable.currentStock}::numeric <= 0 AND ${productsTable.active} = true`);
+    .where(and(
+      sql`${productsTable.currentStock}::numeric <= 0 AND ${productsTable.active} = true`,
+      tenantCond
+    ));
 
   res.json([
     { status: "Healthy", count: healthy.count, color: "#22c55e" },
@@ -256,10 +305,13 @@ router.get("/dashboard/inventory-health", authMiddleware, async (_req, res): Pro
   ]);
 });
 
-router.get("/dashboard/ai-insights", authMiddleware, async (_req, res): Promise<void> => {
-  const forceRefresh = _req.query.force === "true";
-  if (!forceRefresh && aiInsightsCache.data && Date.now() - aiInsightsCache.timestamp < AI_CACHE_TTL) {
-    res.json(aiInsightsCache.data);
+router.get("/dashboard/ai-insights", authMiddleware, async (req: AuthRequest, res): Promise<void> => {
+  const { tenantId } = req.user!;
+  const cacheKey = String(tenantId ?? "platform");
+  const forceRefresh = req.query.force === "true";
+  const cached = aiInsightsCache.get(cacheKey);
+  if (!forceRefresh && cached && Date.now() - cached.timestamp < AI_CACHE_TTL) {
+    res.json(cached.data);
     return;
   }
 
@@ -277,28 +329,36 @@ router.get("/dashboard/ai-insights", authMiddleware, async (_req, res): Promise<
   try {
     const today = new Date();
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const salesTenantCond = tenantId !== null ? eq(salesTable.tenantId, tenantId) : undefined;
+    const purchTenantCond = tenantId !== null ? eq(purchasesTable.tenantId, tenantId) : undefined;
+    const prodTenantCond = tenantId !== null ? eq(productsTable.tenantId, tenantId) : undefined;
 
     const [monthlyRevenue] = await db.select({
       total: sql<number>`COALESCE(SUM(grand_total::numeric), 0)`
-    }).from(salesTable).where(gte(salesTable.saleDate, monthStart));
+    }).from(salesTable).where(and(gte(salesTable.saleDate, monthStart), salesTenantCond));
 
     const [monthlyPurchases] = await db.select({
       total: sql<number>`COALESCE(SUM(grand_total::numeric), 0)`
-    }).from(purchasesTable).where(gte(purchasesTable.invoiceDate, monthStart));
+    }).from(purchasesTable).where(and(gte(purchasesTable.invoiceDate, monthStart), purchTenantCond));
 
     const lowStockProducts = await db.select({
       name: productsTable.name,
       stock: productsTable.currentStock,
       minAlert: productsTable.minStockAlert,
     }).from(productsTable)
-      .where(sql`${productsTable.currentStock}::numeric <= ${productsTable.minStockAlert}::numeric AND ${productsTable.active} = true`)
+      .where(and(
+        sql`${productsTable.currentStock}::numeric <= ${productsTable.minStockAlert}::numeric AND ${productsTable.active} = true`,
+        prodTenantCond
+      ))
       .limit(10);
 
+    const tenantSql = tenantId !== null ? sql`AND s.tenant_id = ${tenantId}` : sql``;
     const topProducts = await db.execute(sql`
       SELECT p.name, COALESCE(SUM(si.quantity::numeric), 0) as qty, COALESCE(SUM(si.total::numeric), 0) as revenue
       FROM products p
       INNER JOIN sale_items si ON si.product_id = p.id
       INNER JOIN sales s ON s.id = si.sale_id AND s.sale_date >= ${monthStart}
+      ${tenantSql}
       GROUP BY p.id, p.name
       ORDER BY revenue DESC LIMIT 5
     `);
@@ -306,14 +366,16 @@ router.get("/dashboard/ai-insights", authMiddleware, async (_req, res): Promise<
     const [pendingPayments] = await db.select({
       total: sql<number>`COALESCE(SUM(balance_due::numeric), 0)`,
       count: sql<number>`count(*)::int`
-    }).from(salesTable).where(sql`${salesTable.paymentStatus} != 'paid'`);
+    }).from(salesTable).where(and(sql`${salesTable.paymentStatus} != 'paid'`, salesTenantCond));
 
+    const salesTrendSql = tenantId !== null ? sql`AND tenant_id = ${tenantId}` : sql``;
     const salesTrend = await db.execute(sql`
       SELECT
         sale_date::date::text as date,
         SUM(grand_total::numeric) as daily_total
       FROM sales
       WHERE sale_date >= ${monthStart}
+      ${salesTrendSql}
       GROUP BY sale_date::date
       ORDER BY sale_date::date
     `);
@@ -332,7 +394,7 @@ router.get("/dashboard/ai-insights", authMiddleware, async (_req, res): Promise<
     };
 
     const completion = await ai.chat.completions.create({
-      model: "gpt-5-nano",
+      model: "gpt-4o-mini",
       max_completion_tokens: 1024,
       messages: [
         {
@@ -369,8 +431,7 @@ router.get("/dashboard/ai-insights", authMiddleware, async (_req, res): Promise<
     }
 
     const response = { insights, generatedAt: new Date().toISOString() };
-    aiInsightsCache.data = response;
-    aiInsightsCache.timestamp = Date.now();
+    aiInsightsCache.set(cacheKey, { data: response, timestamp: Date.now() });
     res.json(response);
   } catch (error: any) {
     console.error("AI insights error:", error.message);

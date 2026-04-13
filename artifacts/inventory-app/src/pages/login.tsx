@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { useLogin } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ export default function Login() {
   const [password, setPassword] = useState("Admin@123");
   const { login } = useAuth();
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const loginMutation = useLogin();
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -101,6 +103,16 @@ export default function Login() {
                 <p className="font-medium text-primary mb-1">Demo Credentials:</p>
                 <p className="text-muted-foreground">admin@demo.com / Admin@123</p>
               </div>
+              <p className="mt-5 text-center text-sm text-muted-foreground">
+                New to InventoPro?{" "}
+                <button
+                  type="button"
+                  onClick={() => setLocation("/signup")}
+                  className="text-primary font-medium hover:underline"
+                >
+                  Start free trial
+                </button>
+              </p>
             </CardContent>
           </Card>
         </motion.div>

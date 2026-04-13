@@ -59,12 +59,13 @@ router.post("/auth/login", async (req, res): Promise<void> => {
 
   await db.update(usersTable).set({ failedLoginAttempts: 0, lockedUntil: null }).where(eq(usersTable.id, user.id));
 
-  const accessToken = generateAccessToken(user.id, user.role);
+  const accessToken = generateAccessToken(user.id, user.role, user.tenantId);
   const refreshToken = generateRefreshToken(user.id);
 
   await db.insert(refreshTokensTable).values({
     token: refreshToken,
     userId: user.id,
+    tenantId: user.tenantId,
     expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
   });
 
@@ -76,6 +77,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
       name: user.name,
       email: user.email,
       role: user.role,
+      tenantId: user.tenantId,
       active: user.active,
       createdAt: user.createdAt.toISOString(),
     },
@@ -106,12 +108,13 @@ router.post("/auth/refresh", async (req, res): Promise<void> => {
 
     await db.delete(refreshTokensTable).where(eq(refreshTokensTable.token, parsed.data.refreshToken));
 
-    const accessToken = generateAccessToken(user.id, user.role);
+    const accessToken = generateAccessToken(user.id, user.role, user.tenantId);
     const refreshToken = generateRefreshToken(user.id);
 
     await db.insert(refreshTokensTable).values({
       token: refreshToken,
       userId: user.id,
+      tenantId: user.tenantId,
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     });
 
@@ -123,6 +126,7 @@ router.post("/auth/refresh", async (req, res): Promise<void> => {
         name: user.name,
         email: user.email,
         role: user.role,
+        tenantId: user.tenantId,
         active: user.active,
         createdAt: user.createdAt.toISOString(),
       },
@@ -157,6 +161,7 @@ router.get("/auth/me", authMiddleware, async (req: AuthRequest, res): Promise<vo
     name: user.name,
     email: user.email,
     role: user.role,
+    tenantId: user.tenantId,
     active: user.active,
     createdAt: user.createdAt.toISOString(),
   });

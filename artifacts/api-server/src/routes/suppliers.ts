@@ -16,7 +16,7 @@ import { authMiddleware, requireRole, type AuthRequest } from "../lib/auth";
 
 const router: IRouter = Router();
 
-router.get("/suppliers", authMiddleware, async (req, res): Promise<void> => {
+router.get("/suppliers", authMiddleware, async (req: AuthRequest, res): Promise<void> => {
   const params = ListSuppliersQueryParams.safeParse(req.query);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -25,8 +25,10 @@ router.get("/suppliers", authMiddleware, async (req, res): Promise<void> => {
 
   const { page = 1, limit = 20, search } = params.data;
   const offset = (page - 1) * limit;
+  const { tenantId } = req.user!;
 
   const conditions: any[] = [];
+  if (tenantId !== null) conditions.push(eq(suppliersTable.tenantId, tenantId));
   if (search) {
     conditions.push(
       sql`(${suppliersTable.name} ILIKE ${'%' + search + '%'} OR ${suppliersTable.phone} ILIKE ${'%' + search + '%'} OR ${suppliersTable.gstin} ILIKE ${'%' + search + '%'})`
@@ -56,18 +58,23 @@ router.post("/suppliers", authMiddleware, requireRole("super_admin", "admin"), a
     return;
   }
 
-  const [supplier] = await db.insert(suppliersTable).values(parsed.data).returning();
+  const { tenantId } = req.user!;
+  const [supplier] = await db.insert(suppliersTable).values({ ...parsed.data, tenantId }).returning();
   res.status(201).json({ ...supplier, createdAt: supplier.createdAt.toISOString() });
 });
 
-router.get("/suppliers/:id", authMiddleware, async (req, res): Promise<void> => {
+router.get("/suppliers/:id", authMiddleware, async (req: AuthRequest, res): Promise<void> => {
   const params = GetSupplierParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
 
-  const [supplier] = await db.select().from(suppliersTable).where(eq(suppliersTable.id, params.data.id)).limit(1);
+  const { tenantId } = req.user!;
+  const conditions: any[] = [eq(suppliersTable.id, params.data.id)];
+  if (tenantId !== null) conditions.push(eq(suppliersTable.tenantId, tenantId));
+
+  const [supplier] = await db.select().from(suppliersTable).where(and(...conditions)).limit(1);
   if (!supplier) {
     res.status(404).json({ error: "Supplier not found" });
     return;
@@ -89,7 +96,11 @@ router.patch("/suppliers/:id", authMiddleware, requireRole("super_admin", "admin
     return;
   }
 
-  const [supplier] = await db.update(suppliersTable).set(parsed.data).where(eq(suppliersTable.id, params.data.id)).returning();
+  const { tenantId } = req.user!;
+  const conditions: any[] = [eq(suppliersTable.id, params.data.id)];
+  if (tenantId !== null) conditions.push(eq(suppliersTable.tenantId, tenantId));
+
+  const [supplier] = await db.update(suppliersTable).set(parsed.data).where(and(...conditions)).returning();
   if (!supplier) {
     res.status(404).json({ error: "Supplier not found" });
     return;
@@ -105,7 +116,11 @@ router.delete("/suppliers/:id", authMiddleware, requireRole("super_admin", "admi
     return;
   }
 
-  const [supplier] = await db.delete(suppliersTable).where(eq(suppliersTable.id, params.data.id)).returning();
+  const { tenantId } = req.user!;
+  const conditions: any[] = [eq(suppliersTable.id, params.data.id)];
+  if (tenantId !== null) conditions.push(eq(suppliersTable.tenantId, tenantId));
+
+  const [supplier] = await db.delete(suppliersTable).where(and(...conditions)).returning();
   if (!supplier) {
     res.status(404).json({ error: "Supplier not found" });
     return;

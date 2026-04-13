@@ -25,8 +25,10 @@ router.get("/users", authMiddleware, requireRole("super_admin", "admin"), async 
 
   const { page = 1, limit = 20, search } = params.data;
   const offset = (page - 1) * limit;
+  const { tenantId } = req.user!;
 
-  const conditions = [];
+  const conditions: any[] = [];
+  if (tenantId !== null) conditions.push(eq(usersTable.tenantId, tenantId));
   if (search) {
     conditions.push(
       sql`(${usersTable.name} ILIKE ${'%' + search + '%'} OR ${usersTable.email} ILIKE ${'%' + search + '%'})`
@@ -63,6 +65,8 @@ router.post("/users", authMiddleware, requireRole("super_admin"), async (req: Au
     return;
   }
 
+  const { tenantId } = req.user!;
+
   const existing = await db.select().from(usersTable).where(eq(usersTable.email, parsed.data.email)).limit(1);
   if (existing.length > 0) {
     res.status(400).json({ error: "Email already exists" });
@@ -71,6 +75,7 @@ router.post("/users", authMiddleware, requireRole("super_admin"), async (req: Au
 
   const passwordHash = await hashPassword(parsed.data.password);
   const [user] = await db.insert(usersTable).values({
+    tenantId,
     name: parsed.data.name,
     email: parsed.data.email,
     passwordHash,
@@ -94,6 +99,10 @@ router.get("/users/:id", authMiddleware, requireRole("super_admin", "admin"), as
     return;
   }
 
+  const { tenantId } = req.user!;
+  const conditions: any[] = [eq(usersTable.id, params.data.id)];
+  if (tenantId !== null) conditions.push(eq(usersTable.tenantId, tenantId));
+
   const [user] = await db.select({
     id: usersTable.id,
     name: usersTable.name,
@@ -101,7 +110,7 @@ router.get("/users/:id", authMiddleware, requireRole("super_admin", "admin"), as
     role: usersTable.role,
     active: usersTable.active,
     createdAt: usersTable.createdAt,
-  }).from(usersTable).where(eq(usersTable.id, params.data.id)).limit(1);
+  }).from(usersTable).where(and(...conditions)).limit(1);
 
   if (!user) {
     res.status(404).json({ error: "User not found" });
@@ -124,13 +133,17 @@ router.patch("/users/:id", authMiddleware, requireRole("super_admin"), async (re
     return;
   }
 
+  const { tenantId } = req.user!;
+  const conditions: any[] = [eq(usersTable.id, params.data.id)];
+  if (tenantId !== null) conditions.push(eq(usersTable.tenantId, tenantId));
+
   const updateData: any = {};
   if (parsed.data.name !== undefined) updateData.name = parsed.data.name;
   if (parsed.data.email !== undefined) updateData.email = parsed.data.email;
   if (parsed.data.role !== undefined) updateData.role = parsed.data.role;
   if (parsed.data.active !== undefined) updateData.active = parsed.data.active;
 
-  const [user] = await db.update(usersTable).set(updateData).where(eq(usersTable.id, params.data.id)).returning();
+  const [user] = await db.update(usersTable).set(updateData).where(and(...conditions)).returning();
   if (!user) {
     res.status(404).json({ error: "User not found" });
     return;
@@ -158,7 +171,11 @@ router.delete("/users/:id", authMiddleware, requireRole("super_admin"), async (r
     return;
   }
 
-  const [user] = await db.delete(usersTable).where(eq(usersTable.id, params.data.id)).returning();
+  const { tenantId } = req.user!;
+  const conditions: any[] = [eq(usersTable.id, params.data.id)];
+  if (tenantId !== null) conditions.push(eq(usersTable.tenantId, tenantId));
+
+  const [user] = await db.delete(usersTable).where(and(...conditions)).returning();
   if (!user) {
     res.status(404).json({ error: "User not found" });
     return;

@@ -16,7 +16,7 @@ import { authMiddleware, requireRole, type AuthRequest } from "../lib/auth";
 
 const router: IRouter = Router();
 
-router.get("/products", authMiddleware, async (req, res): Promise<void> => {
+router.get("/products", authMiddleware, async (req: AuthRequest, res): Promise<void> => {
   const params = ListProductsQueryParams.safeParse(req.query);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -25,8 +25,10 @@ router.get("/products", authMiddleware, async (req, res): Promise<void> => {
 
   const { page = 1, limit = 20, search, categoryId, status, lowStock, sortBy = "name", sortOrder = "asc" } = params.data;
   const offset = (page - 1) * limit;
+  const { tenantId } = req.user!;
 
   const conditions: any[] = [];
+  if (tenantId !== null) conditions.push(eq(productsTable.tenantId, tenantId));
   if (search) {
     conditions.push(
       sql`(${productsTable.name} ILIKE ${'%' + search + '%'} OR ${productsTable.sku} ILIKE ${'%' + search + '%'} OR ${productsTable.brand} ILIKE ${'%' + search + '%'})`
@@ -114,7 +116,10 @@ router.post("/products", authMiddleware, requireRole("super_admin", "admin", "st
     return;
   }
 
+  const { tenantId } = req.user!;
+
   const [product] = await db.insert(productsTable).values({
+    tenantId,
     name: parsed.data.name,
     categoryId: parsed.data.categoryId,
     brand: parsed.data.brand,
@@ -147,12 +152,16 @@ router.post("/products", authMiddleware, requireRole("super_admin", "admin", "st
   });
 });
 
-router.get("/products/:id", authMiddleware, async (req, res): Promise<void> => {
+router.get("/products/:id", authMiddleware, async (req: AuthRequest, res): Promise<void> => {
   const params = GetProductParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
+
+  const { tenantId } = req.user!;
+  const conditions: any[] = [eq(productsTable.id, params.data.id)];
+  if (tenantId !== null) conditions.push(eq(productsTable.tenantId, tenantId));
 
   const [product] = await db
     .select({
@@ -180,7 +189,7 @@ router.get("/products/:id", authMiddleware, async (req, res): Promise<void> => {
     .from(productsTable)
     .leftJoin(categoriesTable, eq(productsTable.categoryId, categoriesTable.id))
     .leftJoin(suppliersTable, eq(productsTable.supplierId, suppliersTable.id))
-    .where(eq(productsTable.id, params.data.id))
+    .where(and(...conditions))
     .limit(1);
 
   if (!product) {
@@ -214,6 +223,10 @@ router.patch("/products/:id", authMiddleware, requireRole("super_admin", "admin"
     return;
   }
 
+  const { tenantId } = req.user!;
+  const conditions: any[] = [eq(productsTable.id, params.data.id)];
+  if (tenantId !== null) conditions.push(eq(productsTable.tenantId, tenantId));
+
   const updateData: any = {};
   const d = parsed.data;
   if (d.name !== undefined) updateData.name = d.name;
@@ -233,7 +246,7 @@ router.patch("/products/:id", authMiddleware, requireRole("super_admin", "admin"
   if (d.expiryDate !== undefined) updateData.expiryDate = d.expiryDate ? new Date(d.expiryDate) : null;
   if (d.active !== undefined) updateData.active = d.active;
 
-  const [product] = await db.update(productsTable).set(updateData).where(eq(productsTable.id, params.data.id)).returning();
+  const [product] = await db.update(productsTable).set(updateData).where(and(...conditions)).returning();
   if (!product) {
     res.status(404).json({ error: "Product not found" });
     return;
@@ -261,7 +274,11 @@ router.delete("/products/:id", authMiddleware, requireRole("super_admin", "admin
     return;
   }
 
-  const [product] = await db.delete(productsTable).where(eq(productsTable.id, params.data.id)).returning();
+  const { tenantId } = req.user!;
+  const conditions: any[] = [eq(productsTable.id, params.data.id)];
+  if (tenantId !== null) conditions.push(eq(productsTable.tenantId, tenantId));
+
+  const [product] = await db.delete(productsTable).where(and(...conditions)).returning();
   if (!product) {
     res.status(404).json({ error: "Product not found" });
     return;

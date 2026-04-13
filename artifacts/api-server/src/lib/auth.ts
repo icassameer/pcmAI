@@ -21,16 +21,16 @@ export async function comparePassword(password: string, hash: string): Promise<b
   return bcrypt.compare(password, hash);
 }
 
-export function generateAccessToken(userId: number, role: string): string {
-  return jwt.sign({ userId, role }, JWT_SECRET, { expiresIn: "15m" });
+export function generateAccessToken(userId: number, role: string, tenantId: number | null): string {
+  return jwt.sign({ userId, role, tenantId }, JWT_SECRET, { expiresIn: "15m" });
 }
 
 export function generateRefreshToken(userId: number): string {
   return jwt.sign({ userId }, JWT_REFRESH_SECRET, { expiresIn: "7d" });
 }
 
-export function verifyAccessToken(token: string): { userId: number; role: string } {
-  return jwt.verify(token, JWT_SECRET) as { userId: number; role: string };
+export function verifyAccessToken(token: string): { userId: number; role: string; tenantId: number | null } {
+  return jwt.verify(token, JWT_SECRET) as { userId: number; role: string; tenantId: number | null };
 }
 
 export function verifyRefreshToken(token: string): { userId: number } {
@@ -38,7 +38,7 @@ export function verifyRefreshToken(token: string): { userId: number } {
 }
 
 export interface AuthRequest extends Request {
-  user?: { userId: number; role: string };
+  user?: { userId: number; role: string; tenantId: number | null };
 }
 
 export async function authMiddleware(req: AuthRequest, res: Response, next: NextFunction): Promise<void> {
@@ -64,7 +64,13 @@ export async function authMiddleware(req: AuthRequest, res: Response, next: Next
       return;
     }
 
-    req.user = decoded;
+    // Support legacy tokens (no tenantId field) by falling back to the user's tenantId in the DB.
+    // New tokens always carry tenantId in the payload.
+    const tenantId: number | null = decoded.tenantId !== undefined
+      ? decoded.tenantId
+      : (user.tenantId ?? null);
+
+    req.user = { userId: decoded.userId, role: decoded.role, tenantId };
     next();
   } catch {
     res.status(401).json({ error: "Invalid or expired token" });

@@ -1,10 +1,10 @@
-import { ReactNode, useState } from "react";
+import { ReactNode, useState, useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { 
-  LayoutDashboard, Package, Tags, Users, Building2, 
-  ShoppingCart, Receipt, FileText, Settings, ShieldCheck, 
-  LogOut, Menu, X, ChevronDown, Moon, Sun
+import {
+  LayoutDashboard, Package, Tags, Users, Building2,
+  ShoppingCart, Receipt, FileText, Settings, ShieldCheck,
+  LogOut, Menu, X, ChevronDown, Moon, Sun, Clock
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -14,16 +14,37 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { motion, AnimatePresence } from "framer-motion";
 
+const API_BASE = import.meta.env.VITE_API_URL || "/api";
+
+interface BillingStatus {
+  status: string;
+  plan: string;
+  trialEndsAt: string | null;
+  daysRemaining: number | null;
+}
+
 export function AppLayout({ children }: { children: ReactNode }) {
   const { user, logout, checkRole } = useAuth();
   const [location] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
+  const [billingStatus, setBillingStatus] = useState<BillingStatus | null>(null);
 
   const toggleDarkMode = () => {
     setDarkMode(!darkMode);
     document.documentElement.classList.toggle('dark');
   };
+
+  useEffect(() => {
+    const token = localStorage.getItem("accessToken");
+    if (!token) return;
+    fetch(`${API_BASE}/billing/status`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setBillingStatus(data); })
+      .catch(() => {});
+  }, [user?.id]);
 
   const navItems = [
     { name: "Dashboard", path: "/", icon: LayoutDashboard, roles: ["super_admin", "admin", "store_keeper", "accountant", "viewer"] },
@@ -138,6 +159,25 @@ export function AppLayout({ children }: { children: ReactNode }) {
             </DropdownMenu>
           </div>
         </header>
+        {billingStatus?.status === "trial" && billingStatus.daysRemaining !== null && (
+          <div className={`shrink-0 px-4 py-2 flex items-center justify-between text-sm font-medium ${
+            billingStatus.daysRemaining <= 3
+              ? "bg-destructive/10 text-destructive border-b border-destructive/20"
+              : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-b border-amber-500/20"
+          }`}>
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 shrink-0" />
+              {billingStatus.daysRemaining === 0
+                ? "Your free trial has expired. Upgrade to continue."
+                : `Free trial: ${billingStatus.daysRemaining} day${billingStatus.daysRemaining === 1 ? "" : "s"} remaining`}
+            </div>
+            <Link href="/settings">
+              <button className="ml-4 px-3 py-1 rounded-lg text-xs font-semibold bg-primary text-primary-foreground hover:opacity-90 transition-opacity whitespace-nowrap">
+                Upgrade Now
+              </button>
+            </Link>
+          </div>
+        )}
         <main className="flex-1 overflow-y-auto bg-background p-4 md:p-6 lg:p-8">
           <motion.div
             initial={{ opacity: 0, y: 10 }}

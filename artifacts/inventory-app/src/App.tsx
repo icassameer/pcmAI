@@ -8,6 +8,7 @@ import { AppLayout } from "@/components/layout";
 
 import NotFound from "@/pages/not-found";
 import Login from "@/pages/login";
+import Signup from "@/pages/signup";
 import Dashboard from "@/pages/dashboard";
 import Products from "@/pages/products";
 import Categories from "@/pages/categories";
@@ -60,6 +61,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/login" component={Login} />
+      <Route path="/signup" component={Signup} />
       
       <Route path="/">
         <AppLayout><ProtectedRoute component={Dashboard} /></AppLayout>

@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db, businessProfileTable } from "@workspace/db";
 import {
   GetBusinessProfileResponse,
@@ -10,11 +10,17 @@ import { authMiddleware, requireRole, type AuthRequest } from "../lib/auth";
 
 const router: IRouter = Router();
 
-router.get("/business", authMiddleware, async (_req, res): Promise<void> => {
-  let [business] = await db.select().from(businessProfileTable).limit(1);
+router.get("/business", authMiddleware, async (req: AuthRequest, res): Promise<void> => {
+  const { tenantId } = req.user!;
+  const conditions: any[] = [];
+  if (tenantId !== null) conditions.push(eq(businessProfileTable.tenantId, tenantId));
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+  let [business] = await db.select().from(businessProfileTable).where(whereClause).limit(1);
 
   if (!business) {
     [business] = await db.insert(businessProfileTable).values({
+      tenantId,
       name: "My Business",
       invoicePrefix: "INV",
       nextInvoiceNum: 1,
@@ -44,9 +50,15 @@ router.patch("/business", authMiddleware, requireRole("super_admin", "admin"), a
     return;
   }
 
-  let [business] = await db.select().from(businessProfileTable).limit(1);
+  const { tenantId } = req.user!;
+  const conditions: any[] = [];
+  if (tenantId !== null) conditions.push(eq(businessProfileTable.tenantId, tenantId));
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+  let [business] = await db.select().from(businessProfileTable).where(whereClause).limit(1);
   if (!business) {
     [business] = await db.insert(businessProfileTable).values({
+      tenantId,
       name: "My Business",
       invoicePrefix: "INV",
       nextInvoiceNum: 1,
