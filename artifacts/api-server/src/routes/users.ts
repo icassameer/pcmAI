@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, ilike, sql, and } from "drizzle-orm";
 import { db, usersTable } from "@workspace/db";
+import { checkUserLimit } from "../middleware/tenantGuard";
 import {
   ListUsersQueryParams,
   ListUsersResponse,
@@ -58,7 +59,7 @@ router.get("/users", authMiddleware, requireRole("super_admin", "admin"), async 
   });
 });
 
-router.post("/users", authMiddleware, requireRole("super_admin"), async (req: AuthRequest, res): Promise<void> => {
+router.post("/users", authMiddleware, requireRole("super_admin"), checkUserLimit, async (req: AuthRequest, res): Promise<void> => {
   const parsed = CreateUserBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });

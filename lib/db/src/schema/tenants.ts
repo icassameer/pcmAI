@@ -3,7 +3,7 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
 // plan: free | starter | pro
-// status: trial | active | suspended
+// status: trial | active | grace | suspended
 export const tenantsTable = pgTable("tenants", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -11,6 +11,7 @@ export const tenantsTable = pgTable("tenants", {
   plan: text("plan").notNull().default("free"),
   status: text("status").notNull().default("trial"),
   trialEndsAt: timestamp("trial_ends_at", { withTimezone: true }),
+  gracePeriodEndsAt: timestamp("grace_period_ends_at", { withTimezone: true }),
   razorpayCustomerId: text("razorpay_customer_id"),
   razorpaySubscriptionId: text("razorpay_subscription_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

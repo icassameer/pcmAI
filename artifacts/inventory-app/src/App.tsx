@@ -21,6 +21,8 @@ import NewPurchase from "@/pages/purchases-new";
 import Reports from "@/pages/reports";
 import Settings from "@/pages/settings";
 import Users from "@/pages/users";
+import Upgrade from "@/pages/upgrade";
+import PlatformAdmin from "@/pages/platform-admin";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -98,6 +100,12 @@ function Router() {
       </Route>
       <Route path="/users">
         <AppLayout><ProtectedRoute component={Users} roles={["super_admin"]} /></AppLayout>
+      </Route>
+      <Route path="/upgrade">
+        <AppLayout><ProtectedRoute component={Upgrade} /></AppLayout>
+      </Route>
+      <Route path="/platform">
+        <AppLayout><ProtectedRoute component={PlatformAdmin} roles={["platform_admin"]} /></AppLayout>
       </Route>
 
       <Route component={NotFound} />

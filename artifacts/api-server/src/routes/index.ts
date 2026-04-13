@@ -13,6 +13,8 @@ import reportsRouter from "./reports";
 import businessRouter from "./business";
 import downloadRouter from "./download";
 import tenantsRouter from "./tenants";
+import billingRouter from "./billing";
+import platformRouter from "./platform";
 
 const router: IRouter = Router();
 
@@ -30,5 +32,7 @@ router.use(reportsRouter);
 router.use(businessRouter);
 router.use(downloadRouter);
 router.use(tenantsRouter);
+router.use(billingRouter);
+router.use(platformRouter);
 
 export default router;

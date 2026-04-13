@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { eq, sql, and, asc, desc, lte } from "drizzle-orm";
 import { db, productsTable, categoriesTable, suppliersTable } from "@workspace/db";
+import { checkProductLimit } from "../middleware/tenantGuard";
 import {
   ListProductsQueryParams,
   ListProductsResponse,
@@ -109,7 +110,7 @@ router.get("/products", authMiddleware, async (req: AuthRequest, res): Promise<v
   });
 });
 
-router.post("/products", authMiddleware, requireRole("super_admin", "admin", "store_keeper"), async (req: AuthRequest, res): Promise<void> => {
+router.post("/products", authMiddleware, requireRole("super_admin", "admin", "store_keeper"), checkProductLimit, async (req: AuthRequest, res): Promise<void> => {
   const parsed = CreateProductBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });

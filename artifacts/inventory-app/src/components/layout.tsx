@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/use-auth";
 import {
   LayoutDashboard, Package, Tags, Users, Building2,
   ShoppingCart, Receipt, FileText, Settings, ShieldCheck,
-  LogOut, Menu, X, ChevronDown, Moon, Sun, Clock
+  LogOut, Menu, ChevronDown, Moon, Sun, Clock, Globe
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -57,6 +57,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
     { name: "Reports", path: "/reports", icon: FileText, roles: ["super_admin", "admin", "accountant"] },
     { name: "Business Settings", path: "/settings", icon: Settings, roles: ["super_admin", "admin"] },
     { name: "Users", path: "/users", icon: ShieldCheck, roles: ["super_admin"] },
+    { name: "Platform Admin", path: "/platform", icon: Globe, roles: ["platform_admin"] },
   ];
 
   const filteredNav = navItems.filter(item => checkRole(item.roles as any[]));
@@ -171,7 +172,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 ? "Your free trial has expired. Upgrade to continue."
                 : `Free trial: ${billingStatus.daysRemaining} day${billingStatus.daysRemaining === 1 ? "" : "s"} remaining`}
             </div>
-            <Link href="/settings">
+            <Link href="/upgrade">
               <button className="ml-4 px-3 py-1 rounded-lg text-xs font-semibold bg-primary text-primary-foreground hover:opacity-90 transition-opacity whitespace-nowrap">
                 Upgrade Now
               </button>
