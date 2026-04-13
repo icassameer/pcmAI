@@ -1,8 +1,8 @@
 # SOP — InventoPro Development & Setup
 **Standard Operating Procedure**  
-**Project:** InventoPro — Inventory Management System  
-**Version:** 3.0  
-**Last Updated:** March 2026  
+**Project:** InventoPro — Multi-Tenant GST Billing & Inventory SaaS  
+**Version:** 4.0  
+**Last Updated:** April 2026  
 
 ---
 
@@ -22,7 +22,8 @@
 12. [Redeployment Workflow](#12-redeployment-workflow)
 13. [Troubleshooting](#13-troubleshooting)
 14. [Environment Variables Reference](#14-environment-variables-reference)
-15. [Planned Improvements](#15-planned-improvements)
+15. [Multi-Tenant Architecture](#15-multi-tenant-architecture)
+16. [Planned Improvements](#16-planned-improvements)
 
 ---
 
@@ -131,9 +132,13 @@ JWT_SECRET=your-long-random-secret
 JWT_REFRESH_SECRET=your-long-random-refresh-secret
 PORT=8080
 
-# Optional — only needed for AI dashboard insights
-AI_INTEGRATIONS_OPENAI_BASE_URL=https://api.openai.com/v1
-AI_INTEGRATIONS_OPENAI_API_KEY=sk-your-openai-key-here
+# Optional — AI dashboard insights
+OPENAI_API_KEY=sk-your-openai-key
+
+# Razorpay — get from https://dashboard.razorpay.com/app/keys
+RAZORPAY_KEY_ID=rzp_test_xxxx
+RAZORPAY_KEY_SECRET=xxxx
+RAZORPAY_WEBHOOK_SECRET=xxxx
 ```
 
 > ⚠️ **Never commit `.env` to GitHub.** It is already in `.gitignore`.
@@ -152,7 +157,7 @@ AI_INTEGRATIONS_OPENAI_API_KEY=sk-your-openai-key-here
 > "
 > ```
 
-### Step 4 — Run database migrations
+### Step 4 — Run Drizzle schema push
 
 > ⚠️ Must set `DATABASE_URL` in PowerShell session first:
 
@@ -161,15 +166,36 @@ $env:DATABASE_URL="postgresql://postgres:yourpassword@localhost:5432/inventopro"
 pnpm --filter @workspace/db run push
 ```
 
-### Step 5 — Seed demo data
-```powershell
-pnpm --filter @workspace/scripts run seed
+### Step 5 — Apply multi-tenant migration
+
+This adds `tenant_id` to all tables and creates the `tenants` + `plans` tables:
+
+```bash
+# Linux/VPS:
+sudo -u postgres psql -d inventopro -f lib/db/src/migrate-phase1.sql
+
+# Windows:
+psql -U postgres -d inventopro -f lib/db/src/migrate-phase1.sql
+```
+
+### Step 6 — Seed plans + demo tenant
+
+```bash
+# Linux/VPS:
+sudo -u postgres psql -d inventopro -f lib/db/src/seed-tenant.sql
+
+# Windows:
+psql -U postgres -d inventopro -f lib/db/src/seed-tenant.sql
 ```
 
 This creates:
-- Default admin: `admin@demo.com` / `Admin@123`
-- 5 categories, 2 suppliers, 10 sample products
-- Business profile
+- 3 subscription plans (Free Trial, Starter ₹499/mo, Pro ₹999/mo)
+- Demo Agency tenant (id=1, plan=pro, status=active)
+- Demo admin user: `admin@demo.com` / `Admin@123`
+- Platform admin user: `platform@inventopro.com` / `PlatformAdmin@123`
+- 5 categories, 2 suppliers, 10 sample products, business profile
+
+> ⚠️ If you already ran the old seed script (`pnpm --filter @workspace/scripts run seed`) in Step 5 before, you can skip re-running the basic seed. The `seed-tenant.sql` is idempotent for the tenant/plans data.
 
 ---
 
@@ -207,10 +233,12 @@ VITE ready in xxxx ms
 Local: http://localhost:5173/
 ```
 
-### Login
-- URL: http://localhost:5173
-- Email: `admin@demo.com`
-- Password: `Admin@123`
+### Login Credentials
+
+| Account | Email | Password | Access |
+|---------|-------|----------|--------|
+| Demo Super Admin | `admin@demo.com` | `Admin@123` | Full tenant (Demo Agency) |
+| Platform Admin | `platform@inventopro.com` | `PlatformAdmin@123` | All tenants, no data isolation |
 
 > 💡 The frontend automatically proxies all `/api` requests to `http://localhost:8080` via Vite proxy config.
 
@@ -278,6 +306,7 @@ git push origin main
 - `node_modules/` — too large
 - `dist/` — build output
 - `*.tsbuildinfo` — TS cache
+- `ecosystem.config.js` — production secrets (already in `.gitignore`)
 
 ---
 
@@ -291,16 +320,22 @@ git push origin main
 5. Use generated hook in frontend
 6. Run `pnpm run typecheck`
 
+> ⚠️ **Multi-tenancy rule:** Every new DB query MUST include `WHERE tenant_id = ?`. Use this pattern from existing routes:
+> ```typescript
+> const tenantSql = tenantId !== null ? sql`AND tenant_id = ${tenantId}` : sql``
+> ```
+
 ### New database table
-1. Add schema in `lib/db/src/schema/`
+1. Add schema in `lib/db/src/schema/` — always include `tenantId` column
 2. Export from `lib/db/src/schema/index.ts`
 3. `$env:DATABASE_URL="..."` then `pnpm --filter @workspace/db run push`
-4. Update seed if needed
+4. **Rebuild db declarations:** `pnpm --filter @workspace/db exec tsc -p tsconfig.json`
+5. Update seed if needed
 
 ### New frontend page
 1. Create in `artifacts/inventory-app/src/pages/`
 2. Add route in `artifacts/inventory-app/src/App.tsx`
-3. Add sidebar link in layout component
+3. Add sidebar link in `artifacts/inventory-app/src/components/layout.tsx`
 
 ---
 
@@ -332,6 +367,12 @@ pnpm run build
 pnpm --filter @workspace/api-server run typecheck
 pnpm --filter @workspace/inventory-app run typecheck
 ```
+
+> ⚠️ If you modified `lib/db/src/schema/`, always rebuild db declarations first:
+> ```bash
+> pnpm --filter @workspace/db exec tsc -p tsconfig.json
+> pnpm run typecheck
+> ```
 
 ---
 
@@ -398,14 +439,18 @@ git clone https://github.com/icassameer/pcmAI.git inventopro
 cd inventopro
 pnpm install
 
-# Run migrations
+# Push Drizzle schema
 export DATABASE_URL="postgresql://postgres:yourpassword@localhost:5432/inventopro"
 pnpm --filter @workspace/db run push
 
-# Seed demo data (first time only)
-pnpm --filter @workspace/scripts run seed
+# Apply multi-tenant migration
+sudo -u postgres psql -d inventopro -f lib/db/src/migrate-phase1.sql
+
+# Seed plans + demo tenant + platform admin
+sudo -u postgres psql -d inventopro -f lib/db/src/seed-tenant.sql
 
 # Build
+pnpm --filter @workspace/db exec tsc -p tsconfig.json
 pnpm --filter @workspace/api-server run build
 pnpm --filter @workspace/inventory-app run build
 ```
@@ -430,7 +475,11 @@ const config = \`module.exports = {
       DATABASE_URL: '\${dbUrl}',
       JWT_SECRET: '\${s1}',
       JWT_REFRESH_SECRET: '\${s2}',
-      PORT: '8080'
+      PORT: '8080',
+      OPENAI_API_KEY: 'sk-your-key',
+      RAZORPAY_KEY_ID: 'rzp_live_xxx',
+      RAZORPAY_KEY_SECRET: 'xxx',
+      RAZORPAY_WEBHOOK_SECRET: 'xxx'
     }
   }]
 };\`;
@@ -503,21 +552,30 @@ git pull origin main
 # 2. Install any new dependencies
 pnpm install
 
-# 3. Build API
+# 3. Rebuild db type declarations (if schema changed)
+pnpm --filter @workspace/db exec tsc -p tsconfig.json
+
+# 4. Build API
 pnpm --filter @workspace/api-server run build
 
-# 4. Build frontend
+# 5. Build frontend
 pnpm --filter @workspace/inventory-app run build
 
-# 5. Restart API
-pm2 restart ecosystem.config.js
+# 6. Restart API — ALWAYS use this exact command
+pm2 startOrRestart ecosystem.config.js --update-env
 
-# 6. Verify
+# 7. Verify
 pm2 status
 pm2 logs inventopro-api --lines 10 --nostream
 ```
 
-> ⚠️ The `ecosystem.config.js` holds all environment variables (JWT secrets, DATABASE_URL, PORT). It is NOT in git. If the server is reprovisioned, regenerate it using the Node.js method in Section 11 Part D.
+> ⚠️ **CRITICAL — Always use `pm2 startOrRestart ecosystem.config.js --update-env`**
+> 
+> **NEVER use:** `pm2 restart inventopro-api`
+>
+> PM2 caches environment variables from when the process was first created. Using `pm2 restart inventopro-api` causes PM2 to use its stale cached env — which may have the WRONG `DATABASE_URL`. This causes all API calls to silently fail with DB connection errors. Always use `--update-env` with the ecosystem file to force PM2 to reload the correct variables.
+
+> ⚠️ The `ecosystem.config.js` holds all environment variables (JWT secrets, DATABASE_URL, Razorpay keys, PORT). It is NOT in git. If the server is reprovisioned, regenerate it using the Node.js method in Section 11 Part D.
 
 ### Check production logs
 ```bash
@@ -528,9 +586,14 @@ pm2 flush                        # clear all logs
 
 ### Restart / Stop
 ```bash
-pm2 restart inventopro-api
+# CORRECT — always use this:
+pm2 startOrRestart ecosystem.config.js --update-env
+
+# STOP:
 pm2 stop inventopro-api
-pm2 delete inventopro-api        # remove from PM2 (use only if reconfiguring)
+
+# Remove from PM2 (use only if reconfiguring):
+pm2 delete inventopro-api
 ```
 
 ---
@@ -558,6 +621,35 @@ $env:DATABASE_URL="postgresql://postgres:yourpassword@localhost:5432/inventopro"
 
 ### `DATABASE_URL must be set`
 Set `$env:DATABASE_URL` in the terminal session before running any command.
+
+### API returns 500 on all routes in production
+**Root cause:** PM2 is using a cached (wrong) `DATABASE_URL` from an earlier process start.
+
+**Diagnosis:**
+```bash
+pm2 env 0 | grep DATABASE_URL
+```
+
+If the URL looks wrong (e.g., wrong password), PM2 has the stale cached value.
+
+**Fix:**
+```bash
+pm2 startOrRestart ecosystem.config.js --update-env
+pm2 env 0 | grep DATABASE_URL   # confirm it's now correct
+```
+
+**Prevention:** Never use `pm2 restart inventopro-api`. Always use `pm2 startOrRestart ecosystem.config.js --update-env`.
+
+### TypeScript errors after modifying `lib/db` schema
+`lib/db` uses TypeScript project references (`composite: true`, `emitDeclarationOnly`). When you add or change columns in `lib/db/src/schema/`, the compiled `.d.ts` output files become stale. TypeScript still reports the old types.
+
+**Fix:**
+```bash
+pnpm --filter @workspace/db exec tsc -p tsconfig.json
+pnpm run typecheck
+```
+
+Run this before every `typecheck` or `build` when the schema has changed.
 
 ### `Could not resolve ./mockupPreviewPlugin`
 Remove the import from `artifacts/inventory-app/vite.config.ts`.
@@ -603,6 +695,27 @@ This is **normal and expected** when using `ecosystem.config.js` — PM2 injects
 ### JWT secret truncation on Linux
 Never use shell `$()` to generate and assign secrets — it strips the trailing newline, resulting in 127 instead of 128 hex chars. Always use the Node.js `fs.writeFileSync` method documented in Section 11 Part D.
 
+### Razorpay routes return 503
+The API gracefully returns 503 when Razorpay keys are not configured. To enable billing:
+1. Get keys from https://dashboard.razorpay.com/app/keys
+2. Add to `artifacts/api-server/.env`:
+   ```
+   RAZORPAY_KEY_ID=rzp_live_xxx
+   RAZORPAY_KEY_SECRET=xxx
+   RAZORPAY_WEBHOOK_SECRET=xxx
+   ```
+3. Add the same to `ecosystem.config.js` env block
+4. `pm2 startOrRestart ecosystem.config.js --update-env`
+
+### Tenant signup or billing status returns error
+Check the `tenants` and `plans` tables exist and have data:
+```bash
+sudo -u postgres psql -d inventopro -c "SELECT id, name, status FROM tenants;"
+sudo -u postgres psql -d inventopro -c "SELECT id, name, price_monthly FROM plans;"
+```
+
+If empty, re-run: `sudo -u postgres psql -d inventopro -f lib/db/src/seed-tenant.sql`
+
 ### CRLF line ending warnings
 Already fixed via `.gitattributes`. If reappears:
 ```powershell
@@ -637,8 +750,12 @@ pm2 save       # saves current process list
 | `JWT_SECRET` | ✅ Yes | Secret for signing access tokens |
 | `JWT_REFRESH_SECRET` | ✅ Yes | Secret for signing refresh tokens |
 | `PORT` | ✅ Yes | API server port (use `8080`) |
-| `AI_INTEGRATIONS_OPENAI_BASE_URL` | ❌ Optional | OpenAI base URL |
-| `AI_INTEGRATIONS_OPENAI_API_KEY` | ❌ Optional | OpenAI API key |
+| `OPENAI_API_KEY` | ❌ Optional | OpenAI API key for AI dashboard insights |
+| `RAZORPAY_KEY_ID` | ❌ Optional | Razorpay publishable key (billing) |
+| `RAZORPAY_KEY_SECRET` | ❌ Optional | Razorpay private key (billing) |
+| `RAZORPAY_WEBHOOK_SECRET` | ❌ Optional | Razorpay webhook signature secret |
+
+> ⚠️ Without Razorpay keys (or when using placeholder values), all billing endpoints return 503 gracefully — all other features work normally.
 
 > ⚠️ On Windows, `DATABASE_URL` must also be set as `$env:DATABASE_URL` in PowerShell before running `db push`.
 
@@ -650,12 +767,114 @@ Located at `/var/www/inventopro/ecosystem.config.js`. Contains all production se
 
 ---
 
-## 15. Planned Improvements
+## 15. Multi-Tenant Architecture
+
+> ✅ **Completed — Session 4 (April 2026)**
+
+InventoPro is a fully multi-tenant SaaS. All data is isolated by `tenant_id` at the row level — a single deployment serves unlimited tenants.
+
+### Architecture Overview
+
+```
+Single URL (pms.icaweb.in)
+        │
+        ├── /signup          ← new agency registers, gets 30-day trial
+        ├── /login           ← all tenants log in here
+        ├── /upgrade         ← Razorpay payment to activate plan
+        └── /platform        ← platform_admin only (all tenants view)
+
+JWT token carries tenantId → every API query adds WHERE tenant_id = ?
+platform_admin → tenantId = null → sees all tenants (no WHERE clause)
+```
+
+### Tenant Lifecycle
+
+```
+signup → [trial 30 days] → payment → [active]
+                                 ↓ payment fails
+                          [grace 7 days] → [suspended]
+```
+
+### User Roles
+
+| Role | Description | Access |
+|------|-------------|--------|
+| `platform_admin` | SaaS operator | All tenants, no data isolation |
+| `super_admin` | Agency owner | Full access to their tenant |
+| `admin` | Manager | Full access except user deactivation |
+| `store_keeper` | Inventory staff | Products, purchases, stock |
+| `accountant` | Finance staff | Sales, purchases, reports |
+| `viewer` | Read-only | View only |
+
+### Plans
+
+| Plan | Price | Users | Products |
+|------|-------|-------|----------|
+| Free Trial | ₹0 / 30 days | 1 | 100 |
+| Starter | ₹499/mo · ₹4,990/yr | 3 | 500 |
+| Pro | ₹999/mo · ₹9,990/yr | Unlimited | Unlimited |
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `lib/db/src/schema/tenants.ts` | `tenants` + `plans` table definitions |
+| `lib/db/src/migrate-phase1.sql` | Adds `tenant_id` to all tables |
+| `lib/db/src/seed-tenant.sql` | Seeds plans + demo tenant + platform admin |
+| `artifacts/api-server/src/lib/auth.ts` | JWT with `tenantId` in payload |
+| `artifacts/api-server/src/middleware/tenantGuard.ts` | `tenantActiveGuard`, `checkUserLimit`, `checkProductLimit` |
+| `artifacts/api-server/src/routes/tenants.ts` | Signup + billing status endpoints |
+| `artifacts/api-server/src/routes/billing.ts` | Razorpay integration |
+| `artifacts/api-server/src/routes/platform.ts` | Platform admin API |
+| `artifacts/inventory-app/src/pages/signup.tsx` | New tenant registration UI |
+| `artifacts/inventory-app/src/pages/upgrade.tsx` | Razorpay checkout UI |
+| `artifacts/inventory-app/src/pages/platform-admin.tsx` | Platform admin dashboard |
+
+### Multi-Tenancy Development Rules
+
+1. **Every new DB query must include tenant filtering:**
+   ```typescript
+   const tenantSql = tenantId !== null ? sql`AND tenant_id = ${tenantId}` : sql``
+   ```
+
+2. **Every new table must have `tenant_id`:**
+   ```typescript
+   tenantId: integer("tenant_id").references(() => tenantsTable.id)
+   ```
+
+3. **platform_admin bypasses all tenant filters** — `tenantId === null` in JWT
+
+4. **Plan enforcement:** New routes that create users/products must include `checkUserLimit` / `checkProductLimit` middleware
+
+5. **Drizzle `numeric` fields:** Always wrap with `Number()` before arithmetic:
+   ```typescript
+   const price = Number(product.price);
+   ```
+
+### Razorpay Payment Flow
+
+```
+1. Frontend: GET /api/billing/razorpay-key   → get publishable key
+2. Frontend: POST /api/billing/subscribe     → create order (returns orderId)
+3. Frontend: Razorpay.open(orderId)          → user pays
+4. Frontend: POST /api/billing/verify-payment → verify HMAC, activate tenant
+5. Webhook:  POST /api/billing/webhook       → handles subscription events
+```
+
+---
+
+## 16. Planned Improvements
+
+### SaaS & Billing
+- [ ] Add annual billing discount display on upgrade page
+- [ ] Tenant invoice/receipt emails on payment
+- [ ] Self-service plan downgrade flow
+- [ ] Trial extension (platform admin override)
 
 ### UI Improvements
 - [ ] Improve dashboard layout and visual design
 - [ ] Better mobile responsiveness
-- [ ] Dark mode support
+- [ ] Dark mode persistence (currently resets on page reload)
 - [ ] Improved data tables with better filtering and export options
 - [ ] Enhanced invoice PDF design and branding
 
@@ -673,6 +892,15 @@ Located at `/var/www/inventopro/ecosystem.config.js`. Contains all production se
 - [ ] Automated database backups (pg_dump cron job)
 - [ ] Create startup script to auto-load env vars locally (avoid manual `$env:` every session)
 
+### Completed
+- ✅ **Multi-tenant SaaS conversion** (Phases 1–5, April 2026)
+  - Row-level tenant isolation (all 12 tables)
+  - Tenant signup with 30-day free trial
+  - Razorpay billing (Starter ₹499/mo, Pro ₹999/mo)
+  - Plan enforcement (user + product limits)
+  - 7-day grace period on payment failure
+  - Platform admin dashboard (all tenants, revenue, status management)
+
 ---
 
 ## Quick Reference Card
@@ -682,26 +910,31 @@ Located at `/var/www/inventopro/ecosystem.config.js`. Contains all production se
 PRODUCTION:
   URL:  https://pms.icaweb.in
   Dir:  /var/www/inventopro
-  Login: admin@demo.com / Admin@123
+
+  Demo Admin:      admin@demo.com / Admin@123
+  Platform Admin:  platform@inventopro.com / PlatformAdmin@123
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 REDEPLOY (after git push):
   cd /var/www/inventopro
   git pull origin main
   pnpm install
+  pnpm --filter @workspace/db exec tsc -p tsconfig.json
   pnpm --filter @workspace/api-server run build
   pnpm --filter @workspace/inventory-app run build
-  pm2 restart ecosystem.config.js
+  pm2 startOrRestart ecosystem.config.js --update-env   ← ALWAYS use this
+  pm2 status
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 FIRST TIME SETUP (local):
   git clone https://github.com/icassameer/pcmAI.git && cd pcmAI
   pnpm install
   psql -U postgres -c "CREATE DATABASE inventopro;"
-  # create artifacts/api-server/.env with JWT_SECRET (not JWT_ACCESS_SECRET)
+  # create artifacts/api-server/.env with JWT_SECRET + Razorpay keys
   $env:DATABASE_URL="postgresql://postgres:pass@localhost:5432/inventopro"
   pnpm --filter @workspace/db run push
-  pnpm --filter @workspace/scripts run seed
+  psql -U postgres -d inventopro -f lib/db/src/migrate-phase1.sql
+  psql -U postgres -d inventopro -f lib/db/src/seed-tenant.sql
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 DAILY LOCAL (Terminal 1 — API):
@@ -713,7 +946,12 @@ DAILY LOCAL (Terminal 1 — API):
 
 DAILY LOCAL (Terminal 2 — Frontend):
   pnpm --filter @workspace/inventory-app run dev
-  → http://localhost:5173  (admin@demo.com / Admin@123)
+  → http://localhost:5173
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+AFTER SCHEMA CHANGE (lib/db):
+  pnpm --filter @workspace/db exec tsc -p tsconfig.json
+  pnpm run typecheck
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 BEFORE COMMITTING:
@@ -733,6 +971,7 @@ BEFORE COMMITTING:
 | March 2026 | Session 1 | Removed Replit deps, fixed TypeScript errors, added README, pushed to GitHub |
 | March 2026 | Session 2 | PostgreSQL setup, DB migrations, seed data, fixed dotenv/vite proxy/cross-env, app running locally, normalized line endings, pushed to GitHub |
 | March 2026 | Session 3 | VPS deployment on Hostbet (Ubuntu 24.04), Node 24 upgrade, pnpm install, DB setup, builds, PM2 ecosystem.config.js, Nginx config, Cloudflare DNS, SSL via Certbot. App live at https://pms.icaweb.in |
+| April 2026 | Session 4 | Multi-tenant SaaS conversion (Phases 1–5): row-level tenant isolation on all 12 tables, JWT with tenantId, tenant signup + 30-day trial, Razorpay billing (Starter/Pro plans), plan enforcement middleware (user/product limits), 7-day grace period on payment failure, platform_admin role with full tenant dashboard, platform admin user seeded. README fully rewritten. |
 
 ---
 
