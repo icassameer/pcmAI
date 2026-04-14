@@ -75,10 +75,10 @@ export default function PlatformAdmin() {
   const tenants: any[] = tenantsData?.tenants ?? [];
 
   const statCards = [
-    { label: "Total Tenants", value: stats?.tenants.total ?? 0, icon: Building2, color: "text-primary" },
-    { label: "Active", value: stats?.tenants.active ?? 0, icon: Users, color: "text-green-500" },
-    { label: "On Trial", value: stats?.tenants.trial ?? 0, icon: TrendingUp, color: "text-amber-500" },
-    { label: "Suspended", value: (stats?.tenants.suspended ?? 0) + (stats?.tenants.grace ?? 0), icon: AlertTriangle, color: "text-destructive" },
+    { label: "Total Tenants", value: stats?.tenants?.total ?? 0, icon: Building2, color: "text-primary" },
+    { label: "Active", value: stats?.tenants?.active ?? 0, icon: Users, color: "text-green-500" },
+    { label: "On Trial", value: stats?.tenants?.trial ?? 0, icon: TrendingUp, color: "text-amber-500" },
+    { label: "Suspended", value: (stats?.tenants?.suspended ?? 0) + (stats?.tenants?.grace ?? 0), icon: AlertTriangle, color: "text-destructive" },
   ];
 
   return (

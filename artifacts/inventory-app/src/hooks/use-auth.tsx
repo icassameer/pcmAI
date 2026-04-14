@@ -54,8 +54,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const checkRole = useCallback((roles: User["role"][]) => {
     if (!user) return false;
-    if (user.role === "super_admin" || user.role === ("platform_admin" as any)) return true;
-    return roles.includes(user.role);
+    // Exact role match always wins
+    if (roles.includes(user.role as any)) return true;
+    // super_admin gets access to all non-platform_admin routes
+    if (user.role === "super_admin" && !roles.includes("platform_admin" as any)) return true;
+    return false;
   }, [user]);
 
   return (
